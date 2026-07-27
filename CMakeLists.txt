@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Fringe VERSION 0.1.0 LANGUAGES C CXX)
+project(Fringe VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,9 +9,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(FRINGE_BUILD_TESTS "Build unit tests" OFF)
 
 include(FetchContent)
-set(FETCHCONTENT_QUIET OFF)
+set(FETCHCONTENT_QUIET ON)
 
-# JUCE 8 — GPL for open-source projects
 FetchContent_Declare(
   juce
   GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
@@ -20,7 +19,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(juce)
 
-# Formats: AU needs full Xcode on macOS; prefer VST3+Standalone when only CLT present
 set(FRINGE_FORMATS VST3 Standalone)
 if(APPLE)
   execute_process(
@@ -55,13 +53,27 @@ juce_add_plugin(Fringe
 
 juce_generate_juce_header(Fringe)
 
-target_sources(Fringe
-  PRIVATE
-    src/PluginProcessor.cpp
-    src/PluginProcessor.h
-    src/PluginEditor.cpp
-    src/PluginEditor.h
+set(FRINGE_SOURCES
+  src/PluginProcessor.cpp
+  src/PluginProcessor.h
+  src/PluginEditor.cpp
+  src/PluginEditor.h
+  src/core/FringeTypes.h
+  src/core/FdtdSimulator.cpp
+  src/core/FdtdSimulator.h
+  src/core/OpticsBuilder.cpp
+  src/core/OpticsBuilder.h
+  src/core/DetectorVoice.cpp
+  src/core/DetectorVoice.h
+  src/core/FxChain.cpp
+  src/core/FxChain.h
+  src/core/FringeEngine.cpp
+  src/core/FringeEngine.h
 )
+
+target_sources(Fringe PRIVATE ${FRINGE_SOURCES})
+
+target_include_directories(Fringe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_compile_definitions(Fringe
   PUBLIC
@@ -82,9 +94,4 @@ target_link_libraries(Fringe
     juce::juce_recommended_warning_flags
 )
 
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "Source" FILES
-  src/PluginProcessor.cpp
-  src/PluginProcessor.h
-  src/PluginEditor.cpp
-  src/PluginEditor.h
-)
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "Source" FILES ${FRINGE_SOURCES})

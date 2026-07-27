@@ -1,29 +1,39 @@
 # Fringe
 
-**Photonic synthesizer** — wave-optics simulation as a virtual instrument.
+**Photonic synthesizer** — wave-optics simulation as a virtual instrument (port of the web Fringe).
 
-Browser original: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)  
-Design plan: see `docs/` and `~/Documents/fringe-plugin-ultraplan.md`
+Live web original: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
 
-## Formats (target)
+## What’s inside (v0.2)
 
-- **VST3** / **AU** / **Standalone** (v1)
-- **CLAP** (fast-follow)
+- **CPU FDTD wave field** (same physics model as the web `WaveEngine`)
+- **Optical presets:** Single Slit, Double Slit, Convex Lens, Diffraction, Open Field
+- **3 detector columns** sonified as stereo voices (web ScriptProcessor path)
+- **FX:** compressor, resonant peaks, scale/drone modes, FDN reverb, filter
+- **Editor:** live wave field + knobs (volume, speed, freq, slit, sens, filter, reverb)
+- **MIDI:** note pulses (Parity) or hold (Enhanced); CC1 → freq, CC74 → filter
+- **QWERTY** pentatonic when the editor is focused
 
-## License
+## Formats
 
-GPL-3.0 (open source). Uses JUCE under GPL.
+- **VST3** → `~/Library/Audio/Plug-Ins/VST3/Fringe.vst3`
+- **Standalone** app under `build/Fringe_artefacts/Release/Standalone/`
 
 ## Build (macOS)
 
 ```bash
+export PATH="$HOME/.local/cmake/bin:$PATH"
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j
 ```
 
-Outputs land under `build/Fringe_artefacts/`.
+## Play
 
-## Status
+1. Open Standalone or load **Fringe** in a DAW  
+2. Leave **SOURCE** on to hear continuous field  
+3. Play MIDI notes or keyboard (Z/A/Q rows)  
+4. Switch presets and twist **Slit** / **Freq** / **Reverb**
 
-**PR-01:** scaffold + sine stub instrument (loads in hosts).  
-DSP / FDTD / editor follow the ultraplan PR ladder.
+## License
+
+GPL-3.0 (JUCE under GPL). See `docs/PRODUCT_DECISIONS.md`.
