@@ -14,7 +14,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "volume", 1 }, "Volume",
-        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.35f));
+        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.4f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "speed", 1 }, "Speed",
@@ -29,12 +29,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
         juce::NormalisableRange<float> { 0.008f, 0.15f, 0.001f }, 0.03f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { "slitW", 1 }, "Width",
+        juce::ParameterID { "slitW", 1 }, "Width/Brush",
         juce::NormalisableRange<float> { 0.004f, 0.06f, 0.001f }, 0.012f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "sens", 1 }, "Sensitivity",
-        juce::NormalisableRange<float> { 0.1f, 5.0f, 0.01f }, 1.5f));
+        juce::NormalisableRange<float> { 0.1f, 5.0f, 0.01f }, 2.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "filter", 1 }, "Filter",
@@ -42,7 +42,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "reverb", 1 }, "Reverb",
-        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.4f));
+        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.45f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "release", 1 }, "Release",
@@ -50,7 +50,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
 
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID { "preset", 1 }, "Preset",
-        juce::StringArray { "Single Slit", "Double Slit", "Convex Lens", "Diffraction", "Open Field" },
+        juce::StringArray { "Single Slit", "Double Slit", "Convex Lens", "Diffraction",
+                            "Mach-Zehnder", "Draw", "Open Field" },
         0));
 
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
@@ -60,12 +61,26 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
 
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { "scaleMode", 1 }, "Scale", false));
-
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { "droneMode", 1 }, "Drone", false));
-
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { "gate", 1 }, "Source Gate", true));
+
+    // LFO 1–3
+    for (int i = 0; i < 3; ++i)
+    {
+        const juce::String n = juce::String (i + 1);
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "lfo" + n + "Rate", 1 }, "LFO" + n + " Rate",
+            juce::NormalisableRange<float> { 0.0f, 8.0f, 0.01f }, 0.0f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "lfo" + n + "Depth", 1 }, "LFO" + n + " Depth",
+            juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.0f));
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID { "lfo" + n + "Target", 1 }, "LFO" + n + " →",
+            juce::StringArray { "Freq", "Speed", "Slit", "Sens", "Filter", "Reverb" },
+            i % 6));
+    }
 
     return { params.begin(), params.end() };
 }
@@ -87,26 +102,35 @@ bool FringeAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 void FringeAudioProcessor::pushParamsToEngine()
 {
     fringe::EngineParams p;
-    auto load = [this] (const char* id, float def) -> float {
+    auto load = [this] (const juce::String& id, float def) -> float {
         if (auto* v = apvts.getRawParameterValue (id))
             return v->load();
         return def;
     };
 
-    p.volume = load ("volume", 0.35f);
+    p.volume = load ("volume", 0.4f);
     p.speed = load ("speed", 0.9f);
     p.freq = load ("freq", 60.0f);
     p.slit = load ("slit", 0.03f);
     p.slitW = load ("slitW", 0.012f);
-    p.sensitivity = load ("sens", 1.5f);
+    p.sensitivity = load ("sens", 2.0f);
     p.filterHz = load ("filter", 7000.0f);
-    p.reverb = load ("reverb", 0.4f);
+    p.reverb = load ("reverb", 0.45f);
     p.release = load ("release", 0.5f);
     p.preset = static_cast<int> (load ("preset", 0.0f));
     p.midiMode = static_cast<int> (load ("midiMode", 0.0f));
     p.scaleMode = load ("scaleMode", 0.0f) > 0.5f;
     p.droneMode = load ("droneMode", 0.0f) > 0.5f;
     p.gate = load ("gate", 1.0f) > 0.5f;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const auto n = juce::String (i + 1);
+        p.lfos[static_cast<size_t> (i)].rate = load ("lfo" + n + "Rate", 0.0f);
+        p.lfos[static_cast<size_t> (i)].depth = load ("lfo" + n + "Depth", 0.0f);
+        p.lfos[static_cast<size_t> (i)].target = static_cast<int> (load ("lfo" + n + "Target", 0.0f));
+    }
+
     engine_.setParams (p);
 }
 
@@ -118,7 +142,6 @@ void FringeAudioProcessor::handleMidi (juce::MidiBuffer& midi)
         if (msg.isNoteOn())
         {
             engine_.noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
-            // Mirror sim freq into APVTS for UI
             if (auto* p = apvts.getParameter ("freq"))
             {
                 const float sim = fringe::midiNoteToSimFreq (msg.getNoteNumber());
@@ -133,7 +156,7 @@ void FringeAudioProcessor::handleMidi (juce::MidiBuffer& midi)
         }
         else if (msg.isController())
         {
-            if (msg.getControllerNumber() == 1) // mod wheel → freq
+            if (msg.getControllerNumber() == 1)
             {
                 const float freq = 15.0f + msg.getControllerValue() / 127.0f * 85.0f;
                 if (auto* p = apvts.getParameter ("freq"))
@@ -143,7 +166,7 @@ void FringeAudioProcessor::handleMidi (juce::MidiBuffer& midi)
                     p->endChangeGesture();
                 }
             }
-            else if (msg.getControllerNumber() == 74) // filter
+            else if (msg.getControllerNumber() == 74)
             {
                 const float hz = 200.0f + msg.getControllerValue() / 127.0f * 11800.0f;
                 if (auto* p = apvts.getParameter ("filter"))

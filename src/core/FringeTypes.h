@@ -9,11 +9,11 @@
 namespace fringe
 {
 
-// Grid tiers (ultraplan). Default Balanced-ish for laptop CPU.
+// Balanced default; max for future HQ
 inline constexpr int kMaxW = 256;
 inline constexpr int kMaxH = 128;
-inline constexpr int kDefaultW = 192;
-inline constexpr int kDefaultH = 96;
+inline constexpr int kDefaultW = 224;
+inline constexpr int kDefaultH = 112;
 
 inline constexpr double kSimDt = 1.0 / 60.0;
 inline constexpr int kSubstepsPerBody = 12;
@@ -21,12 +21,10 @@ inline constexpr float kDamp = 0.9995f;
 inline constexpr float kC2Scale = 0.24f;
 inline constexpr float kC2Max = 0.49f;
 
-// Detector columns (web main.js)
 inline constexpr float kDetL = 0.88f;
 inline constexpr float kDetC = 0.92f;
 inline constexpr float kDetR = 0.96f;
 
-// FDN (audio-engine.js)
 inline constexpr std::array<float, 4> kFdnTimes { 1.37f, 1.71f, 2.23f, 3.19f };
 inline constexpr float kFdnFeedback = 0.55f;
 inline constexpr float kFdnDarkenHz = 2800.0f;
@@ -37,7 +35,9 @@ enum class Preset : int
     DoubleSlit,
     Lens,
     Diffraction,
-    Empty, // free field / draw later
+    MachZehnder,
+    Draw,
+    Empty,
     Count
 };
 
@@ -49,36 +49,50 @@ inline const char* presetName (Preset p)
         case Preset::DoubleSlit:  return "Double Slit";
         case Preset::Lens:        return "Convex Lens";
         case Preset::Diffraction: return "Diffraction";
+        case Preset::MachZehnder: return "Mach-Zehnder";
+        case Preset::Draw:        return "Draw";
         case Preset::Empty:       return "Open Field";
-        default:                  return "?";
+        case Preset::Count:       return "?";
     }
+    return "?";
 }
+
+struct LfoState
+{
+    float rate = 0.0f;   // Hz 0–8
+    float depth = 0.0f;  // 0–1
+    int target = 0;      // 0=freq 1=speed 2=slit 3=sens 4=filter 5=reverb
+    float phase = 0.0f;
+};
 
 struct EngineParams
 {
-    float volume = 0.3f;
+    float volume = 0.35f;
     float speed = 0.9f;
-    float freq = 60.0f;          // sim source freq 15–100
-    float sensitivity = 1.0f;
+    float freq = 60.0f;
+    float sensitivity = 1.8f;
     float filterHz = 7000.0f;
     float reverb = 0.4f;
     float release = 0.5f;
-    float slit = 0.03f;          // gap / width / curvature depending on preset
+    float slit = 0.03f;
     float slitW = 0.012f;
     bool scaleMode = false;
     bool droneMode = false;
-    bool gate = true;   // continuous source (web continuousSource)
+    bool gate = true;
     int preset = 0;
-    int midiMode = 0; // 0=parity pulse, 1=enhanced hold
+    int midiMode = 0;
+    std::array<LfoState, 3> lfos {};
 };
 
 struct FieldSnapshot
 {
     int w = 0, h = 0;
-    std::vector<float> amp;   // w*h amplitude
-    std::vector<float> speed; // w*h speed map
+    std::vector<float> amp;
+    std::vector<float> speed;
+    std::vector<float> detector; // center column for graph
     float detectorX = kDetC;
     float sourceX = 0.06f;
+    float energy = 0.0f;
 };
 
 inline float midiNoteToHz (int note)
@@ -86,7 +100,6 @@ inline float midiNoteToHz (int note)
     return 440.0f * std::pow (2.0f, (static_cast<float> (note) - 69.0f) / 12.0f);
 }
 
-// Web main.js mapping
 inline float midiNoteToSimFreq (int note)
 {
     return std::clamp (15.0f + (static_cast<float> (note) - 21.0f) * (85.0f / 87.0f), 15.0f, 100.0f);
@@ -94,7 +107,6 @@ inline float midiNoteToSimFreq (int note)
 
 inline float midiVelocityToAmp (float vel01)
 {
-    // 0.002 + vel^3 * 0.048
     return 0.002f + vel01 * vel01 * vel01 * 0.048f;
 }
 
@@ -111,7 +123,7 @@ inline float quantizePentatonic (float freq)
         if (d < bestD) { bestD = d; best = static_cast<float> (s); }
     }
     const float octave = std::floor ((semiFromA4 + 3.0f) / 12.0f);
-    const float n = octave * 12.0f + best - 3.0f; // invert semiFromA4 offset-ish
+    const float n = octave * 12.0f + best - 3.0f;
     return A4 * std::pow (2.0f, n / 12.0f);
 }
 

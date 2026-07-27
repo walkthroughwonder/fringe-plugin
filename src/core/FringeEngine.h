@@ -17,21 +17,29 @@ public:
     void reset();
 
     void setParams (const EngineParams& p);
-    EngineParams getParams() const { return params_; }
+    EngineParams getParams() const;
 
     void noteOn (int note, float velocity);
     void noteOff (int note);
     void process (float* left, float* right, int numSamples);
 
-    /** Editor-safe copy of field for painting (rate-limited by caller). */
     bool pullSnapshot (FieldSnapshot& out);
 
+    /** Draw mode: paint walls into the live speed map (message/UI thread OK via mutex). */
+    void paintAt (float uvX, float uvY, float brushUv, bool erase);
+    void clearDrawing();
+    bool isDrawPreset() const;
+
+    int gridW() const { return sim_.width(); }
+    int gridH() const { return sim_.height(); }
     double sampleRate() const { return sampleRate_; }
 
 private:
     void rebuildOptics();
     void applyGateAndEnvelope();
     void pushDetectors();
+    void tickLfos (int numSamples);
+    EngineParams modulatedParams() const;
 
     double sampleRate_ = 44100.0;
     EngineParams params_;
@@ -40,19 +48,19 @@ private:
     FxChain fx_;
 
     std::vector<float> speedScratch_;
+    std::vector<float> drawLayer_; // persistent draw strokes
     std::vector<float> colScratch_;
+    bool hasDraw_ = false;
 
-    // MIDI / gate
     bool sourceOn_ = true;
     float sourceAmp_ = 0.02f;
     float envelope_ = 1.0f;
     int pulseSamplesLeft_ = 0;
     int activeNote_ = -1;
 
-    // Sim scheduling
     double simAccum_ = 0.0;
 
-    // Snapshot for UI
+    mutable std::mutex mapMutex_;
     mutable std::mutex snapMutex_;
     FieldSnapshot snap_;
     std::atomic<bool> snapReady_ { false };

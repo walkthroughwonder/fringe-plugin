@@ -1,39 +1,29 @@
 # Fringe
 
-**Photonic synthesizer** — wave-optics simulation as a virtual instrument (port of the web Fringe).
+**Photonic synthesizer** — wave-optics as a VST3/Standalone instrument (port of [web Fringe](https://edwinrosero.com/fringe/)).
 
-Live web original: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
+## Features (v0.3)
 
-## What’s inside (v0.2)
+- Live **FDTD wave field** with cathedral colour grading + soft bloom
+- Presets: **Single/Double Slit, Lens, Diffraction, Mach–Zehnder, Draw, Open Field**
+- **Draw mode** — paint walls on the field (Width = brush; ERASE; CLEAR; double-click clear)
+- 3-detector stereo sonification + FDN reverb + scale/drone
+- **LFO 1–3** rate/depth (targets: freq/speed/slit/sens/filter/reverb via APVTS)
+- Detector graph sidebar
+- MIDI (pulse/hold) · QWERTY pentatonic · Space = source gate
 
-- **CPU FDTD wave field** (same physics model as the web `WaveEngine`)
-- **Optical presets:** Single Slit, Double Slit, Convex Lens, Diffraction, Open Field
-- **3 detector columns** sonified as stereo voices (web ScriptProcessor path)
-- **FX:** compressor, resonant peaks, scale/drone modes, FDN reverb, filter
-- **Editor:** live wave field + knobs (volume, speed, freq, slit, sens, filter, reverb)
-- **MIDI:** note pulses (Parity) or hold (Enhanced); CC1 → freq, CC74 → filter
-- **QWERTY** pentatonic when the editor is focused
+## Run
 
-## Formats
+```bash
+open build/Fringe_artefacts/Release/Standalone/Fringe.app
+# VST3 also installed to ~/Library/Audio/Plug-Ins/VST3/Fringe.vst3
+```
 
-- **VST3** → `~/Library/Audio/Plug-Ins/VST3/Fringe.vst3`
-- **Standalone** app under `build/Fringe_artefacts/Release/Standalone/`
-
-## Build (macOS)
+## Build
 
 ```bash
 export PATH="$HOME/.local/cmake/bin:$PATH"
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 ```
 
-## Play
-
-1. Open Standalone or load **Fringe** in a DAW  
-2. Leave **SOURCE** on to hear continuous field  
-3. Play MIDI notes or keyboard (Z/A/Q rows)  
-4. Switch presets and twist **Slit** / **Freq** / **Reverb**
-
-## License
-
-GPL-3.0 (JUCE under GPL). See `docs/PRODUCT_DECISIONS.md`.
+GPL-3.0 · see `docs/PRODUCT_DECISIONS.md`

@@ -7,8 +7,11 @@ void FringeEngine::prepare (double sampleRate, int /*maxBlock*/)
 {
     sampleRate_ = sampleRate > 0.0 ? sampleRate : 44100.0;
     sim_.prepare (kDefaultW, kDefaultH);
-    speedScratch_.assign (static_cast<size_t> (kDefaultW * kDefaultH), 1.0f);
-    colScratch_.assign (static_cast<size_t> (kDefaultH), 0.0f);
+    const int n = sim_.width() * sim_.height();
+    speedScratch_.assign (static_cast<size_t> (n), 1.0f);
+    drawLayer_.assign (static_cast<size_t> (n), 1.0f);
+    colScratch_.assign (static_cast<size_t> (sim_.height()), 0.0f);
+    hasDraw_ = false;
     for (auto& v : voices_)
         v.prepare (sampleRate_);
     fx_.prepare (sampleRate_);
@@ -29,29 +32,88 @@ void FringeEngine::reset()
     simAccum_ = 0.0;
 }
 
+EngineParams FringeEngine::getParams() const
+{
+    return params_;
+}
+
+bool FringeEngine::isDrawPreset() const
+{
+    return static_cast<Preset> (params_.preset) == Preset::Draw;
+}
+
 void FringeEngine::setParams (const EngineParams& p)
 {
     const bool opticsDirty = p.preset != params_.preset
                              || std::abs (p.slit - params_.slit) > 1e-6f
                              || std::abs (p.slitW - params_.slitW) > 1e-6f;
+    const bool leavingDraw = static_cast<Preset> (params_.preset) == Preset::Draw
+                             && static_cast<Preset> (p.preset) != Preset::Draw;
+
     params_ = p;
-    if (opticsDirty)
+
+    if (leavingDraw)
+    {
+        hasDraw_ = false;
+        std::fill (drawLayer_.begin(), drawLayer_.end(), 1.0f);
+    }
+
+    // Don't rebuild over draw strokes while in Draw
+    if (opticsDirty && static_cast<Preset> (params_.preset) != Preset::Draw)
+        rebuildOptics();
+    else if (opticsDirty && static_cast<Preset> (params_.preset) == Preset::Draw && ! hasDraw_)
         rebuildOptics();
 
     sim_.setSpeedMult (params_.speed);
     sim_.setSensitivity (params_.sensitivity);
-    fx_.setFilterHz (params_.filterHz);
-    fx_.setReverb (params_.reverb);
-    fx_.setVolume (params_.volume);
-    fx_.setScaleMode (params_.scaleMode);
-    fx_.setDroneMode (params_.droneMode);
 }
 
 void FringeEngine::rebuildOptics()
 {
+    std::lock_guard<std::mutex> lock (mapMutex_);
     const auto preset = static_cast<Preset> (std::clamp (params_.preset, 0, static_cast<int> (Preset::Count) - 1));
     OpticsBuilder::build (preset, params_.slit, params_.slitW, sim_.width(), sim_.height(), speedScratch_.data());
+
+    if (hasDraw_ && preset == Preset::Draw)
+    {
+        // composite: wall if either base or draw is wall
+        for (size_t i = 0; i < speedScratch_.size(); ++i)
+            if (drawLayer_[i] < 0.5f)
+                speedScratch_[i] = 0.0f;
+    }
+
     sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+}
+
+void FringeEngine::paintAt (float uvX, float uvY, float brushUv, bool erase)
+{
+    if (! isDrawPreset())
+        return;
+
+    std::lock_guard<std::mutex> lock (mapMutex_);
+    if (drawLayer_.size() != static_cast<size_t> (sim_.width() * sim_.height()))
+        drawLayer_.assign (static_cast<size_t> (sim_.width() * sim_.height()), 1.0f);
+
+    OpticsBuilder::paintDot (drawLayer_.data(), sim_.width(), sim_.height(), uvX, uvY, brushUv, erase);
+    hasDraw_ = true;
+
+    OpticsBuilder::build (Preset::Draw, params_.slit, params_.slitW, sim_.width(), sim_.height(), speedScratch_.data());
+    for (size_t i = 0; i < speedScratch_.size(); ++i)
+        if (drawLayer_[i] < 0.5f)
+            speedScratch_[i] = 0.0f;
+
+    sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+}
+
+void FringeEngine::clearDrawing()
+{
+    std::lock_guard<std::mutex> lock (mapMutex_);
+    std::fill (drawLayer_.begin(), drawLayer_.end(), 1.0f);
+    hasDraw_ = false;
+    OpticsBuilder::build (static_cast<Preset> (params_.preset), params_.slit, params_.slitW,
+                          sim_.width(), sim_.height(), speedScratch_.data());
+    sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+    sim_.reset();
 }
 
 void FringeEngine::noteOn (int note, float velocity)
@@ -63,14 +125,9 @@ void FringeEngine::noteOn (int note, float velocity)
     envelope_ = 1.0f;
 
     if (params_.midiMode == 0)
-    {
-        // Web-parity: 10 ms pulse
         pulseSamplesLeft_ = static_cast<int> (0.010 * sampleRate_);
-    }
     else
-    {
-        pulseSamplesLeft_ = -1; // held until noteOff
-    }
+        pulseSamplesLeft_ = -1;
 }
 
 void FringeEngine::noteOff (int note)
@@ -92,7 +149,6 @@ void FringeEngine::applyGateAndEnvelope()
             sourceOn_ = false;
     }
 
-    // Continuous gate (web SOURCE on) OR active pulse/held note
     const bool wantOn = params_.gate || pulseSamplesLeft_ > 0
                         || (params_.midiMode == 1 && activeNote_ >= 0);
 
@@ -100,7 +156,7 @@ void FringeEngine::applyGateAndEnvelope()
     {
         sourceOn_ = true;
         if (params_.gate && pulseSamplesLeft_ <= 0 && activeNote_ < 0)
-            sourceAmp_ = 0.02f; // default continuous amp
+            sourceAmp_ = 0.025f;
         envelope_ += (1.0f - envelope_) * 0.1f;
     }
     else
@@ -109,6 +165,49 @@ void FringeEngine::applyGateAndEnvelope()
         const float rate = static_cast<float> (1.0 / sampleRate_ / std::max (0.05f, params_.release));
         envelope_ = std::max (0.0f, envelope_ - rate);
     }
+}
+
+void FringeEngine::tickLfos (int numSamples)
+{
+    const float dt = static_cast<float> (numSamples) / static_cast<float> (sampleRate_);
+    for (auto& l : params_.lfos)
+    {
+        if (l.rate > 0.0001f)
+        {
+            l.phase += l.rate * dt;
+            if (l.phase >= 1.0f)
+                l.phase -= std::floor (l.phase);
+        }
+    }
+}
+
+EngineParams FringeEngine::modulatedParams() const
+{
+    EngineParams p = params_;
+    auto apply = [] (float base, float minV, float maxV, float depth, float lfo) {
+        if (depth <= 0.0f)
+            return base;
+        const float span = (maxV - minV) * depth * 0.5f;
+        return std::clamp (base + lfo * span, minV, maxV);
+    };
+
+    for (const auto& l : params_.lfos)
+    {
+        if (l.depth <= 0.0f || l.rate <= 0.0f)
+            continue;
+        const float wave = std::sin (l.phase * 6.2831853f);
+        switch (l.target)
+        {
+            case 0: p.freq = apply (p.freq, 15.0f, 100.0f, l.depth, wave); break;
+            case 1: p.speed = apply (p.speed, 0.2f, 2.0f, l.depth, wave); break;
+            case 2: p.slit = apply (p.slit, 0.008f, 0.15f, l.depth, wave); break;
+            case 3: p.sensitivity = apply (p.sensitivity, 0.1f, 5.0f, l.depth, wave); break;
+            case 4: p.filterHz = apply (p.filterHz, 200.0f, 12000.0f, l.depth, wave); break;
+            case 5: p.reverb = apply (p.reverb, 0.0f, 1.0f, l.depth, wave); break;
+            default: break;
+        }
+    }
+    return p;
 }
 
 void FringeEngine::pushDetectors()
@@ -130,19 +229,40 @@ void FringeEngine::process (float* left, float* right, int numSamples)
     if (left == nullptr || right == nullptr || numSamples <= 0)
         return;
 
-    // How many FDTD substeps for this block (~720/s like web)
+    tickLfos (numSamples);
+    const auto mod = modulatedParams();
+
+    sim_.setSpeedMult (mod.speed);
+    sim_.setSensitivity (mod.sensitivity);
+    fx_.setFilterHz (mod.filterHz);
+    fx_.setReverb (mod.reverb);
+    fx_.setVolume (mod.volume);
+    fx_.setScaleMode (mod.scaleMode);
+    fx_.setDroneMode (mod.droneMode);
+
+    // Rebuild optics if LFO is modulating slit on geometry presets
+    static float lastSlit = -1.0f;
+    if (std::abs (mod.slit - lastSlit) > 0.002f && static_cast<Preset> (params_.preset) != Preset::Draw)
+    {
+        lastSlit = mod.slit;
+        const float saved = params_.slit;
+        params_.slit = mod.slit;
+        rebuildOptics();
+        params_.slit = saved;
+    }
+
     const double substepsWanted = static_cast<double> (numSamples) / sampleRate_ * 60.0 * kSubstepsPerBody;
     simAccum_ += substepsWanted;
     int subs = static_cast<int> (simAccum_);
     if (subs < 1)
         subs = 1;
     simAccum_ -= subs;
-    if (subs > 24)
-        subs = 24; // safety cap
+    if (subs > 28)
+        subs = 28;
 
     applyGateAndEnvelope();
     const float amp = sourceAmp_ * envelope_;
-    sim_.setSource (0.06f, params_.freq, amp, envelope_ > 0.001f && (sourceOn_ || envelope_ > 0.01f), true);
+    sim_.setSource (0.06f, mod.freq, amp, envelope_ > 0.001f, true);
 
     for (int s = 0; s < subs; ++s)
         sim_.substep();
@@ -155,11 +275,9 @@ void FringeEngine::process (float* left, float* right, int numSamples)
         const float l = voices_[0].processSample();
         const float c = voices_[1].processSample();
         const float r = voices_[2].processSample();
-        const float energy = voices_[1].energy();
-        fx_.process (l, c, r, energy, left[i], right[i]);
+        fx_.process (l, c, r, voices_[1].energy(), left[i], right[i]);
     }
 
-    // Snapshot for editor ~30 Hz
     snapCountdown_ -= numSamples;
     if (snapCountdown_ <= 0)
     {
@@ -169,10 +287,13 @@ void FringeEngine::process (float* left, float* right, int numSamples)
         local.h = sim_.height();
         local.amp.resize (static_cast<size_t> (local.w * local.h));
         local.speed.resize (static_cast<size_t> (local.w * local.h));
+        local.detector.resize (static_cast<size_t> (local.h));
         sim_.copyAmplitude (local.amp.data());
         sim_.copySpeed (local.speed.data());
+        sim_.readDetectorColumn (kDetC, local.detector.data(), local.h);
         local.detectorX = sim_.detectorX();
         local.sourceX = sim_.sourceX();
+        local.energy = voices_[1].energy();
         {
             std::lock_guard<std::mutex> lock (snapMutex_);
             snap_ = std::move (local);
