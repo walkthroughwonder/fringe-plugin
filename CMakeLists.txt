@@ -48,11 +48,12 @@ juce_add_plugin(Fringe
   PLUGIN_CODE Frng
   FORMATS ${FRINGE_FORMATS}
   PRODUCT_NAME "Fringe"
-  PLUGIN_MANUFACTURER_CODE EdRo
   DESCRIPTION "Photonic synthesizer — play light as sound"
   VST3_CATEGORIES Instrument Synth
   AU_MAIN_TYPE kAudioUnitType_MusicDevice
 )
+
+juce_generate_juce_header(Fringe)
 
 target_sources(Fringe
   PRIVATE

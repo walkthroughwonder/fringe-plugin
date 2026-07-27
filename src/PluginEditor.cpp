@@ -8,7 +8,7 @@ const juce::Colour kAccent { 0xffc8a44e };
 } // namespace
 
 FringeAudioProcessorEditor::FringeAudioProcessorEditor (FringeAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), audioProcessor (p)
 {
     setSize (480, 280);
     setResizable (false, false);
@@ -40,7 +40,7 @@ FringeAudioProcessorEditor::FringeAudioProcessorEditor (FringeAudioProcessor& p)
     volumeSlider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     addAndMakeVisible (volumeSlider);
 
-    volumeAttachment = std::make_unique<Attachment> (processor.getAPVTS(), "volume", volumeSlider);
+    volumeAttachment = std::make_unique<Attachment> (audioProcessor.getAPVTS(), "volume", volumeSlider);
 }
 
 void FringeAudioProcessorEditor::paint (juce::Graphics& g)

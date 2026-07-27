@@ -13,7 +13,7 @@ public:
     void resized() override;
 
 private:
-    FringeAudioProcessor& processor;
+    FringeAudioProcessor& audioProcessor;
 
     juce::Slider volumeSlider;
     juce::Label titleLabel;
