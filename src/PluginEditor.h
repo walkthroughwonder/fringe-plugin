@@ -33,6 +33,8 @@ private:
     juce::Colour amplitudeColour (float amp, float uvX, float energy) const;
     juce::Colour scientificColour (float amp) const;
     juce::Image renderFieldImage() const;
+    static float sampleField (const std::vector<float>& data, int w, int h, float fx, float fy);
+    static float sampleSpeed (const std::vector<float>& data, int w, int h, float fx, float fy);
     void paintAtEvent (const juce::MouseEvent& e);
     void styleKnob (juce::Slider& s, const juce::String& name, juce::Colour accent);
     void styleToggle (juce::TextButton& b);

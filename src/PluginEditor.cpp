@@ -200,14 +200,55 @@ FringeAudioProcessorEditor::DragTarget FringeAudioProcessorEditor::hitTestProbes
     return DragTarget::none;
 }
 
+float FringeAudioProcessorEditor::sampleField (const std::vector<float>& data, int w, int h, float fx, float fy)
+{
+    // Bilinear sample; fx/fy in continuous pixel coords [0, w-1] x [0, h-1]
+    if (w < 2 || h < 2 || data.empty())
+        return 0.0f;
+    fx = std::clamp (fx, 0.0f, (float) (w - 1));
+    fy = std::clamp (fy, 0.0f, (float) (h - 1));
+    const int x0 = (int) fx;
+    const int y0 = (int) fy;
+    const int x1 = std::min (x0 + 1, w - 1);
+    const int y1 = std::min (y0 + 1, h - 1);
+    const float tx = fx - (float) x0;
+    const float ty = fy - (float) y0;
+    const float a00 = data[(size_t) (y0 * w + x0)];
+    const float a10 = data[(size_t) (y0 * w + x1)];
+    const float a01 = data[(size_t) (y1 * w + x0)];
+    const float a11 = data[(size_t) (y1 * w + x1)];
+    const float a0 = a00 + (a10 - a00) * tx;
+    const float a1 = a01 + (a11 - a01) * tx;
+    return a0 + (a1 - a0) * ty;
+}
+
+float FringeAudioProcessorEditor::sampleSpeed (const std::vector<float>& data, int w, int h, float fx, float fy)
+{
+    // Nearest for walls (keep edges crisp), slight bilinear for media
+    if (w < 1 || h < 1 || data.empty())
+        return 1.0f;
+    const int x = std::clamp ((int) std::lround (fx), 0, w - 1);
+    const int y = std::clamp ((int) std::lround (fy), 0, h - 1);
+    return data[(size_t) (y * w + x)];
+}
+
 juce::Colour FringeAudioProcessorEditor::scientificColour (float amp) const
 {
-    // Greyscale with strong polarity: + white, - deep teal-black
-    const float t = std::clamp (std::abs (amp) * 1.15f, 0.0f, 1.0f);
-    const float g = std::pow (t, 0.65f);
-    if (amp >= 0.0f)
-        return juce::Colour::fromFloatRGBA (g, g * 0.98f, g * 0.92f, 1.0f);
-    return juce::Colour::fromFloatRGBA (g * 0.15f, g * 0.35f, g * 0.42f, 1.0f);
+    // Diverging blue–black–amber (classic wave lab look)
+    const float a = std::clamp (amp, -1.0f, 1.0f);
+    if (a >= 0.0f)
+    {
+        const float t = std::pow (a, 0.7f);
+        return juce::Colour::fromFloatRGBA (0.05f + 0.95f * t,
+                                            0.08f + 0.75f * t,
+                                            0.12f + 0.25f * t,
+                                            1.0f);
+    }
+    const float t = std::pow (-a, 0.7f);
+    return juce::Colour::fromFloatRGBA (0.05f + 0.1f * t,
+                                        0.12f + 0.45f * t,
+                                        0.18f + 0.75f * t,
+                                        1.0f);
 }
 
 juce::Colour FringeAudioProcessorEditor::amplitudeColour (float amp, float uvX, float energy) const
@@ -215,25 +256,48 @@ juce::Colour FringeAudioProcessorEditor::amplitudeColour (float amp, float uvX, 
     if (scientificView_)
         return scientificColour (amp);
 
+    // Signed amp in [-1,1] after normalize. Use intensity + polarity.
     const float mag = std::abs (amp);
-    const float gain = 6.5f + energy * 4.0f;
-    const float t = std::clamp (mag * gain, 0.0f, 1.0f);
-    const float tg = std::pow (t, 0.72f);
+    // Soft knee gain so quiet fringes still show, peaks don't blow out
+    const float gain = 2.8f + energy * 1.5f;
+    float t = std::clamp (mag * gain, 0.0f, 1.0f);
+    t = t * (0.35f + 0.65f * t); // extra contrast curve
+
     const float age = std::clamp (uvX, 0.0f, 1.0f);
 
-    const juce::Colour young (0xff3ec8d8);
-    const juce::Colour mid (0xffe0b040);
-    const juce::Colour old (0xffe07098);
-    juce::Colour hue = age < 0.4f ? young.interpolatedWith (mid, age / 0.4f)
-                                  : mid.interpolatedWith (old, (age - 0.4f) / 0.6f);
+    // Cathedral age palette (closer to web WaveEngine)
+    auto ramp = [] (float u, juce::Colour lo, juce::Colour mid, juce::Colour hi, juce::Colour pk) {
+        if (u < 0.25f) return lo.interpolatedWith (mid, u / 0.25f);
+        if (u < 0.6f)  return mid.interpolatedWith (hi, (u - 0.25f) / 0.35f);
+        return hi.interpolatedWith (pk, (u - 0.6f) / 0.4f);
+    };
 
-    if (amp < 0.0f)
-        hue = hue.withRotatedHue (0.08f).darker (0.35f);
+    juce::Colour posYoung = ramp (t, juce::Colour (0xff0a1218), juce::Colour (0xff1f596b),
+                                  juce::Colour (0xff4dc6d9), juce::Colour (0xffb8f0ff));
+    juce::Colour posMid   = ramp (t, juce::Colour (0xff14100a), juce::Colour (0xff735828),
+                                  juce::Colour (0xfff2c64d), juce::Colour (0xfffff0c8));
+    juce::Colour posOld   = ramp (t, juce::Colour (0xff140a10), juce::Colour (0xff6b2840),
+                                  juce::Colour (0xffe06090), juce::Colour (0xffffc0d8));
 
-    if (tg > 0.75f)
-        hue = hue.interpolatedWith (juce::Colours::white, (tg - 0.75f) * 1.2f);
+    juce::Colour negYoung = ramp (t, juce::Colour (0xff060a0c), juce::Colour (0xff0a1e28),
+                                  juce::Colour (0xff1a4c66), juce::Colour (0xff3a8ca0));
+    juce::Colour negMid   = ramp (t, juce::Colour (0xff0a0806), juce::Colour (0xff3a2810),
+                                  juce::Colour (0xff8a6020), juce::Colour (0xffc8a050));
+    juce::Colour negOld   = ramp (t, juce::Colour (0xff0c0608), juce::Colour (0xff3a1020),
+                                  juce::Colour (0xff8a2848), juce::Colour (0xffc06080));
 
-    return juce::Colour (0xff05060c).interpolatedWith (hue, tg);
+    juce::Colour pos = age < 0.4f ? posYoung.interpolatedWith (posMid, age / 0.4f)
+                                  : posMid.interpolatedWith (posOld, (age - 0.4f) / 0.6f);
+    juce::Colour neg = age < 0.4f ? negYoung.interpolatedWith (negMid, age / 0.4f)
+                                  : negMid.interpolatedWith (negOld, (age - 0.4f) / 0.6f);
+
+    juce::Colour c = amp >= 0.0f ? pos : neg;
+
+    // faint zero-line darkness for fringe readability
+    if (mag < 0.04f)
+        c = juce::Colour (0xff06060c).interpolatedWith (c, mag / 0.04f);
+
+    return c;
 }
 
 juce::Image FringeAudioProcessorEditor::renderFieldImage() const
@@ -241,56 +305,129 @@ juce::Image FringeAudioProcessorEditor::renderFieldImage() const
     if (snapshot_.w <= 0 || snapshot_.amp.empty())
         return {};
 
-    const int w = snapshot_.w;
-    const int h = snapshot_.h;
-    juce::Image img (juce::Image::ARGB, w, h, true);
+    const int sw = snapshot_.w;
+    const int sh = snapshot_.h;
+    // Supersample 3x for smooth fringes without heavier FDTD
+    constexpr int kSS = 3;
+    const int dw = sw * kSS;
+    const int dh = sh * kSS;
+    juce::Image img (juce::Image::ARGB, dw, dh, true);
     const float energy = snapshot_.energy;
 
+    // Robust normalize: use 95th percentile-ish via max with soft floor
     float maxA = 1.0e-5f;
     for (float a : snapshot_.amp)
         maxA = std::max (maxA, std::abs (a));
+    // EMA-ish soft max so flashing peaks don't darken the whole field
+    maxA = std::max (maxA, 1.0e-4f);
     const float invMax = 1.0f / maxA;
 
-    for (int y = 0; y < h; ++y)
+    const float detX = snapshot_.detectorX;
+    const float srcX = snapshot_.sourceX;
+
+    for (int y = 0; y < dh; ++y)
     {
-        for (int x = 0; x < w; ++x)
+        for (int x = 0; x < dw; ++x)
         {
-            const size_t i = static_cast<size_t> (y * w + x);
-            const float spd = snapshot_.speed[i];
-            const float amp = snapshot_.amp[i] * invMax;
-            const float uvX = (static_cast<float> (x) + 0.5f) / static_cast<float> (w);
+            // continuous sim coords
+            const float fx = ((float) x + 0.5f) / (float) kSS - 0.5f;
+            const float fy = ((float) y + 0.5f) / (float) kSS - 0.5f;
+            const float uvX = ((float) x + 0.5f) / (float) dw;
+            const float uvY = ((float) y + 0.5f) / (float) dh;
+
+            const float spd = sampleSpeed (snapshot_.speed, sw, sh, fx, fy);
+            const float amp = sampleField (snapshot_.amp, sw, sh, fx, fy) * invMax;
 
             juce::Colour c;
-            if (spd < 0.05f)
+            if (spd < 0.08f)
             {
-                c = scientificView_ ? juce::Colour (0xffe8dcc0) : juce::Colour (0xff0a0810);
-                bool edge = false;
-                if (x > 0 && snapshot_.speed[i - 1] > 0.2f) edge = true;
-                if (x + 1 < w && snapshot_.speed[i + 1] > 0.2f) edge = true;
-                if (y > 0 && snapshot_.speed[i - (size_t) w] > 0.2f) edge = true;
-                if (y + 1 < h && snapshot_.speed[i + (size_t) w] > 0.2f) edge = true;
-                if (edge)
-                    c = scientificView_ ? juce::Colour (0xff222018)
-                                        : juce::Colour (0xffc9a84c).interpolatedWith (c, 0.35f);
+                // Walls: matte body + soft edge via speed gradient
+                const float sL = sampleSpeed (snapshot_.speed, sw, sh, fx - 0.6f, fy);
+                const float sR = sampleSpeed (snapshot_.speed, sw, sh, fx + 0.6f, fy);
+                const float sU = sampleSpeed (snapshot_.speed, sw, sh, fx, fy - 0.6f);
+                const float sD = sampleSpeed (snapshot_.speed, sw, sh, fx, fy + 0.6f);
+                const float edge = std::max ({ sL, sR, sU, sD });
+                if (scientificView_)
+                {
+                    c = juce::Colour (0xff1a1814);
+                    if (edge > 0.3f)
+                        c = juce::Colour (0xffc8b890);
+                }
+                else
+                {
+                    c = juce::Colour (0xff0c0a12);
+                    if (edge > 0.3f)
+                        c = juce::Colour (0xffc9a84c).interpolatedWith (c, 0.25f);
+                }
             }
-            else if (spd < 0.72f)
+            else if (spd < 0.75f)
             {
-                c = amplitudeColour (amp, uvX, energy)
-                        .interpolatedWith (scientificView_ ? juce::Colour (0xff304050)
-                                                           : juce::Colour (0xff1a3040),
-                                           0.25f);
+                // Media / beamsplitter tint
+                c = amplitudeColour (amp, uvX, energy);
+                const juce::Colour media = scientificView_ ? juce::Colour (0xff203040)
+                                                           : juce::Colour (0xff142830);
+                c = c.interpolatedWith (media, 0.22f * (1.0f - spd));
             }
             else
             {
                 c = amplitudeColour (amp, uvX, energy);
             }
 
-            if (std::abs (uvX - snapshot_.detectorX) < (1.5f / (float) w))
-                c = c.interpolatedWith (scientificView_ ? juce::Colours::yellow : kGold, 0.55f);
+            // Source plane: soft cyan sheet
+            {
+                const float d = std::abs (uvX - srcX);
+                if (d < 0.012f)
+                {
+                    const float g = 1.0f - d / 0.012f;
+                    c = c.interpolatedWith (kCyan, g * g * 0.35f);
+                }
+            }
 
-            img.setPixelAt (x, h - 1 - y, c);
+            // Detector plane: thin gold/yellow
+            {
+                const float d = std::abs (uvX - detX);
+                if (d < 0.008f)
+                {
+                    const float g = 1.0f - d / 0.008f;
+                    c = c.interpolatedWith (scientificView_ ? juce::Colours::yellow : kGold, g * g * 0.55f);
+                }
+            }
+
+            // Subtle vertical gradient (depth cue) without crushing contrast
+            if (! scientificView_)
+            {
+                const float vFade = 0.92f + 0.08f * std::sin (uvY * 3.14159f);
+                c = c.withMultipliedBrightness (vFade);
+            }
+
+            img.setPixelAt (x, dh - 1 - y, c);
         }
     }
+
+    // Peak-only micro glow (does not mush the whole field)
+    if (! scientificView_)
+    {
+        juce::Image glow = img.createCopy();
+        for (int y = 1; y < dh - 1; y += 2)
+        {
+            for (int x = 1; x < dw - 1; x += 2)
+            {
+                auto p = img.getPixelAt (x, y);
+                const float lum = p.getFloatRed() * 0.25f + p.getFloatGreen() * 0.55f + p.getFloatBlue() * 0.2f;
+                if (lum < 0.62f)
+                    continue;
+                const float a = (lum - 0.62f) * 0.4f;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx)
+                    {
+                        auto q = glow.getPixelAt (x + dx, y + dy);
+                        glow.setPixelAt (x + dx, y + dy, q.interpolatedWith (p, a * 0.12f));
+                    }
+            }
+        }
+        return glow;
+    }
+
     return img;
 }
 
@@ -364,13 +501,15 @@ void FringeAudioProcessorEditor::paintWaveField (juce::Graphics& g, juce::Rectan
     }
     else
     {
-        g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
+        g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
         g.drawImage (fieldCache_, inner.toFloat());
 
         if (! scientificView_)
         {
-            juce::ColourGradient vig (juce::Colours::transparentBlack, (float) inner.getCentreX(), (float) inner.getCentreY(),
-                                      juce::Colours::black.withAlpha (0.18f), (float) inner.getX(), (float) inner.getY(), true);
+            juce::ColourGradient vig (juce::Colours::transparentBlack,
+                                      (float) inner.getCentreX(), (float) inner.getCentreY(),
+                                      juce::Colours::black.withAlpha (0.12f),
+                                      (float) inner.getX(), (float) inner.getY(), true);
             g.setGradientFill (vig);
             g.fillRect (inner);
         }
