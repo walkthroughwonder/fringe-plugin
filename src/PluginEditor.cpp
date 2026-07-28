@@ -153,26 +153,32 @@ void FringeAudioProcessorEditor::timerCallback()
 
 juce::Colour FringeAudioProcessorEditor::amplitudeColour (float amp, float uvX, float energy) const
 {
-    const float t = std::clamp (std::pow (std::abs (amp) * 3.2f, 0.82f), 0.0f, 1.0f);
+    // High-contrast fringes: amplitude drives brightness hard so interference reads as stripes
+    const float mag = std::abs (amp);
+    // Auto-ish gain: quiet fields still show structure
+    const float gain = 6.5f + energy * 4.0f;
+    const float t = std::clamp (mag * gain, 0.0f, 1.0f);
+    // gamma for punchy peaks without washing mids
+    const float tg = std::pow (t, 0.72f);
     const float age = std::clamp (uvX, 0.0f, 1.0f);
 
-    // Young cyan → mid amber → old rose
-    const juce::Colour young (0xff2a9fb0);
-    const juce::Colour mid (0xffd4a23a);
-    const juce::Colour old (0xffc05078);
+    const juce::Colour young (0xff3ec8d8); // cyan
+    const juce::Colour mid (0xffe0b040);   // amber
+    const juce::Colour old (0xffe07098);   // rose
+    juce::Colour hue = age < 0.4f ? young.interpolatedWith (mid, age / 0.4f)
+                                  : mid.interpolatedWith (old, (age - 0.4f) / 0.6f);
 
-    juce::Colour base = age < 0.38f ? young.interpolatedWith (mid, age / 0.38f)
-                                    : mid.interpolatedWith (old, (age - 0.38f) / 0.62f);
-
+    // polarity: negative phase slightly cooler/darker (classic interference look)
     if (amp < 0.0f)
-        base = base.withRotatedHue (0.06f).darker (0.28f);
+        hue = hue.withRotatedHue (0.08f).darker (0.35f);
 
-    // energy-reactive bloom
-    const float bloom = std::clamp ((t - 0.45f) * 2.4f + energy * 0.4f, 0.0f, 1.0f);
-    base = base.interpolatedWith (juce::Colours::white, bloom * 0.42f);
+    // peak sparkle only at true highs (not a mushy bloom wash)
+    if (tg > 0.75f)
+        hue = hue.interpolatedWith (juce::Colours::white, (tg - 0.75f) * 1.2f);
 
-    const juce::Colour deep (0xff04050a);
-    return deep.interpolatedWith (base, t);
+    const juce::Colour deep (0xff05060c);
+    // floor dim so zero-crossings read black (fringe lines)
+    return deep.interpolatedWith (hue, tg);
 }
 
 juce::Image FringeAudioProcessorEditor::renderFieldImage() const
@@ -185,54 +191,55 @@ juce::Image FringeAudioProcessorEditor::renderFieldImage() const
     juce::Image img (juce::Image::ARGB, w, h, true);
     const float energy = snapshot_.energy;
 
+    // percentile-ish scale: find max abs amp for adaptive contrast
+    float maxA = 1.0e-5f;
+    for (float a : snapshot_.amp)
+        maxA = std::max (maxA, std::abs (a));
+    const float invMax = 1.0f / maxA;
+
     for (int y = 0; y < h; ++y)
     {
         for (int x = 0; x < w; ++x)
         {
             const size_t i = static_cast<size_t> (y * w + x);
             const float spd = snapshot_.speed[i];
-            const float amp = snapshot_.amp[i];
+            const float amp = snapshot_.amp[i] * invMax; // normalize field
             const float uvX = (static_cast<float> (x) + 0.5f) / static_cast<float> (w);
 
             juce::Colour c;
             if (spd < 0.05f)
-                c = juce::Colour (0xff100e16); // wall
-            else if (spd < 0.72f)
-                c = juce::Colour (0xff152028).interpolatedWith (amplitudeColour (amp, uvX, energy), 0.65f);
-            else
-                c = amplitudeColour (amp, uvX, energy);
-
-            // soft detector glow column
-            if (std::abs (uvX - snapshot_.detectorX) < 0.012f)
             {
-                const float g = 1.0f - std::abs (uvX - snapshot_.detectorX) / 0.012f;
-                c = c.interpolatedWith (kGold, g * 0.55f);
+                // solid wall — high contrast vs field
+                c = juce::Colour (0xff0a0810);
+                // bright edge if free-space neighbor (reads as drawn barrier)
+                bool edge = false;
+                if (x > 0 && snapshot_.speed[i - 1] > 0.2f) edge = true;
+                if (x + 1 < w && snapshot_.speed[i + 1] > 0.2f) edge = true;
+                if (y > 0 && snapshot_.speed[i - (size_t) w] > 0.2f) edge = true;
+                if (y + 1 < h && snapshot_.speed[i + (size_t) w] > 0.2f) edge = true;
+                if (edge)
+                    c = juce::Colour (0xffc9a84c).withAlpha (0.85f).interpolatedWith (c, 0.35f);
             }
+            else if (spd < 0.72f)
+            {
+                // beamsplitter / lens medium
+                c = amplitudeColour (amp, uvX, energy).interpolatedWith (juce::Colour (0xff1a3040), 0.25f);
+            }
+            else
+            {
+                c = amplitudeColour (amp, uvX, energy);
+            }
+
+            // thin detector hairline (not a fat glow wash)
+            if (std::abs (uvX - snapshot_.detectorX) < (1.5f / (float) w))
+                c = c.interpolatedWith (kGold, 0.65f);
 
             img.setPixelAt (x, h - 1 - y, c);
         }
     }
 
-    // Cheap bloom: brighten neighbors of hot pixels (2-pass light blur on copy)
-    juce::Image bloom = img.createCopy();
-    for (int y = 1; y < h - 1; ++y)
-    {
-        for (int x = 1; x < w - 1; ++x)
-        {
-            auto p = img.getPixelAt (x, y);
-            const float lum = p.getFloatRed() * 0.3f + p.getFloatGreen() * 0.5f + p.getFloatBlue() * 0.2f;
-            if (lum < 0.35f)
-                continue;
-            const float a = (lum - 0.35f) * 0.35f;
-            for (int dy = -1; dy <= 1; ++dy)
-                for (int dx = -1; dx <= 1; ++dx)
-                {
-                    auto q = bloom.getPixelAt (x + dx, y + dy);
-                    bloom.setPixelAt (x + dx, y + dy, q.interpolatedWith (p, a * 0.15f));
-                }
-        }
-    }
-    return bloom;
+    // NO full-field blur — keep interference stripes sharp
+    return img;
 }
 
 void FringeAudioProcessorEditor::paintChrome (juce::Graphics& g)
@@ -269,16 +276,17 @@ void FringeAudioProcessorEditor::paintWaveField (juce::Graphics& g, juce::Rectan
     {
         g.setColour (kMuted);
         g.setFont (juce::FontOptions (13.0f));
-        g.drawText ("initializing wave field…", inner, juce::Justification::centred);
+        g.drawText ("initializing wave field...", inner, juce::Justification::centred);
     }
     else
     {
-        g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+        // medium quality keeps fringe detail when upscaling low-res sim
+        g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
         g.drawImage (fieldCache_, inner.toFloat());
 
-        // cinematic letterbox vignette
+        // light vignette only (was washing out fringes)
         juce::ColourGradient vig (juce::Colours::transparentBlack, (float) inner.getCentreX(), (float) inner.getCentreY(),
-                                  juce::Colours::black.withAlpha (0.45f), (float) inner.getX(), (float) inner.getY(), true);
+                                  juce::Colours::black.withAlpha (0.22f), (float) inner.getX(), (float) inner.getY(), true);
         g.setGradientFill (vig);
         g.fillRect (inner);
 
@@ -326,7 +334,7 @@ void FringeAudioProcessorEditor::paintWaveField (juce::Graphics& g, juce::Rectan
     {
         g.setColour (kGold.withAlpha (0.85f));
         g.setFont (juce::FontOptions (10.0f));
-        g.drawText (eraser_ ? "DRAW · eraser" : "DRAW · paint walls  ·  double-click clear",
+        g.drawText (eraser_ ? "DRAW mode: eraser" : "DRAW mode: paint walls  |  double-click clears",
                     area.reduced (10).removeFromTop (16), juce::Justification::topLeft);
     }
 }
@@ -390,7 +398,7 @@ void FringeAudioProcessorEditor::paintDetectorPanel (juce::Graphics& g, juce::Re
     r.removeFromTop (6);
     g.setColour (kMuted);
     g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("MIDI · QWERTY · SPACE", r, juce::Justification::centredLeft);
+    g.drawText ("MIDI / QWERTY / SPACE", r, juce::Justification::centredLeft);
 }
 
 void FringeAudioProcessorEditor::paintKnobRailLabels (juce::Graphics& g)
@@ -405,15 +413,16 @@ void FringeAudioProcessorEditor::paintKnobRailLabels (juce::Graphics& g)
         g.drawText (s->getName(), b.getX(), b.getBottom() - 1, b.getWidth(), 11, juce::Justification::centred);
     }
 
-    // section captions above rail groups
+    // section captions sit just above the knob rail (not over the wave field)
     if (! knobRail_.isEmpty())
     {
-        g.setColour (kGold.withAlpha (0.45f));
+        g.setColour (kGold.withAlpha (0.55f));
         g.setFont (juce::FontOptions (9.0f));
-        const int third = knobRail_.getWidth() / 3;
-        g.drawText ("TONE", knobRail_.getX(), knobRail_.getY() - 14, third, 12, juce::Justification::centred);
-        g.drawText ("FIELD", knobRail_.getX() + third, knobRail_.getY() - 14, third, 12, juce::Justification::centred);
-        g.drawText ("MODULATION", knobRail_.getX() + 2 * third, knobRail_.getY() - 14, third, 12, juce::Justification::centred);
+        // 8 tone/field knobs then 6 LFO: split 8/6
+        const int cell = knobRail_.getWidth() / 14;
+        g.drawText ("TONE", knobRail_.getX(), knobRail_.getY() - 13, cell * 4, 12, juce::Justification::centred);
+        g.drawText ("FIELD", knobRail_.getX() + cell * 4, knobRail_.getY() - 13, cell * 4, 12, juce::Justification::centred);
+        g.drawText ("MOD", knobRail_.getX() + cell * 8, knobRail_.getY() - 13, cell * 6, 12, juce::Justification::centred);
     }
 }
 
@@ -442,11 +451,11 @@ void FringeAudioProcessorEditor::paint (juce::Graphics& g)
     {
         g.setColour (kMuted);
         g.setFont (juce::FontOptions (10.0f));
-        juce::String status = "20:9  ·  mid/bass factory  ·  ";
-        status += gateButton.getToggleState() ? "source on  ·  " : "source off  ·  ";
-        status += scaleButton.getToggleState() ? "scale  ·  " : "";
-        status += droneButton.getToggleState() ? "drone  ·  " : "";
-        status += "keys Z–P · space toggles source";
+        juce::String status = "20:9  |  mid/bass factory  |  ";
+        status += gateButton.getToggleState() ? "source on  |  " : "source off  |  ";
+        status += scaleButton.getToggleState() ? "scale  |  " : "";
+        status += droneButton.getToggleState() ? "drone  |  " : "";
+        status += "keys Z-P  |  space = source";
         g.drawText (status, statusBar_, juce::Justification::centredLeft);
     }
 }
@@ -469,12 +478,14 @@ void FringeAudioProcessorEditor::resized()
     }
 
     statusBar_ = r.removeFromBottom (18);
-    r.removeFromBottom (4);
+    r.removeFromBottom (2);
 
-    // bottom knob rail ~28% of remaining height
-    const int railH = juce::jlimit (96, 130, r.getHeight() * 28 / 100);
+    // space for section labels above knobs
+    r.removeFromBottom (14);
+    // bottom knob rail ~26% of remaining height
+    const int railH = juce::jlimit (100, 128, r.getHeight() * 26 / 100);
     knobRail_ = r.removeFromBottom (railH);
-    r.removeFromBottom (10);
+    r.removeFromBottom (8);
 
     // right detector strip ~14% width
     const int detW = juce::jlimit (120, 170, r.getWidth() * 14 / 100);
