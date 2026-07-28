@@ -30,6 +30,12 @@ public:
     void clearDrawing();
     bool isDrawPreset() const;
 
+    /** Drag probes on the field (message thread). Clamped UV. */
+    void setSourceX (float uvX);
+    void setDetectorX (float uvX);
+    float getSourceX() const;
+    float getDetectorX() const;
+
     int gridW() const { return sim_.width(); }
     int gridH() const { return sim_.height(); }
     double sampleRate() const { return sampleRate_; }

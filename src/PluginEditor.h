@@ -22,26 +22,35 @@ public:
     void mouseMove (const juce::MouseEvent& e) override;
 
 private:
+    enum class DragTarget { none, source, detector, paint };
+
     void timerCallback() override;
     void paintChrome (juce::Graphics& g);
     void paintWaveField (juce::Graphics& g, juce::Rectangle<int> area);
     void paintDetectorPanel (juce::Graphics& g, juce::Rectangle<int> area);
     void paintKnobRailLabels (juce::Graphics& g);
+    void paintProbeHandles (juce::Graphics& g, juce::Rectangle<int> inner);
     juce::Colour amplitudeColour (float amp, float uvX, float energy) const;
+    juce::Colour scientificColour (float amp) const;
     juce::Image renderFieldImage() const;
     void paintAtEvent (const juce::MouseEvent& e);
     void styleKnob (juce::Slider& s, const juce::String& name, juce::Colour accent);
     void styleToggle (juce::TextButton& b);
+    void setParamFloat (const juce::String& id, float value);
+    DragTarget hitTestProbes (juce::Point<float> pos, juce::Rectangle<int> inner) const;
+    float xToUv (float x, juce::Rectangle<int> inner) const;
+    float uvToX (float uv, juce::Rectangle<int> inner) const;
 
     FringeAudioProcessor& audioProcessor;
     fringe::FieldSnapshot snapshot_;
     juce::Image fieldCache_;
     bool fieldDirty_ = true;
+    bool scientificView_ = false;
 
     juce::Rectangle<int> fieldArea_, detectorArea_, topBar_, knobRail_, statusBar_;
     juce::ComponentBoundsConstrainer constrainer_;
 
-    bool drawing_ = false;
+    DragTarget drag_ = DragTarget::none;
     bool eraser_ = false;
     juce::Point<float> hoverUv_ { -1.0f, -1.0f };
     float animPhase_ = 0.0f;
@@ -52,6 +61,7 @@ private:
     juce::TextButton droneButton { "DRONE" };
     juce::TextButton clearDrawButton { "CLEAR" };
     juce::TextButton eraserButton { "ERASE" };
+    juce::TextButton viewButton { "CINE" }; // toggles to SCI
 
     juce::Slider volumeSlider, speedSlider, freqSlider, slitSlider, slitWSlider,
         sensSlider, filterSlider, reverbSlider;

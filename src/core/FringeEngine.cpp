@@ -66,7 +66,22 @@ void FringeEngine::setParams (const EngineParams& p)
 
     sim_.setSpeedMult (params_.speed);
     sim_.setSensitivity (params_.sensitivity);
+    sim_.setDetectorX (std::clamp (params_.detectorX, 0.55f, 0.98f));
 }
+
+void FringeEngine::setSourceX (float uvX)
+{
+    params_.sourceX = std::clamp (uvX, 0.02f, 0.45f);
+}
+
+void FringeEngine::setDetectorX (float uvX)
+{
+    params_.detectorX = std::clamp (uvX, 0.55f, 0.98f);
+    sim_.setDetectorX (params_.detectorX);
+}
+
+float FringeEngine::getSourceX() const { return params_.sourceX; }
+float FringeEngine::getDetectorX() const { return params_.detectorX; }
 
 void FringeEngine::rebuildOptics()
 {
@@ -216,11 +231,16 @@ void FringeEngine::pushDetectors()
     if (static_cast<int> (colScratch_.size()) != h)
         colScratch_.assign (static_cast<size_t> (h), 0.0f);
 
-    sim_.readDetectorColumn (kDetL, colScratch_.data(), h);
+    // L/C/R around movable center detector
+    const float c = std::clamp (params_.detectorX, 0.55f, 0.98f);
+    const float l = std::clamp (c - 0.04f, 0.50f, 0.97f);
+    const float r = std::clamp (c + 0.04f, 0.53f, 0.99f);
+
+    sim_.readDetectorColumn (l, colScratch_.data(), h);
     voices_[0].pushColumn (colScratch_.data(), h);
-    sim_.readDetectorColumn (kDetC, colScratch_.data(), h);
+    sim_.readDetectorColumn (c, colScratch_.data(), h);
     voices_[1].pushColumn (colScratch_.data(), h);
-    sim_.readDetectorColumn (kDetR, colScratch_.data(), h);
+    sim_.readDetectorColumn (r, colScratch_.data(), h);
     voices_[2].pushColumn (colScratch_.data(), h);
 }
 
@@ -262,7 +282,8 @@ void FringeEngine::process (float* left, float* right, int numSamples)
 
     applyGateAndEnvelope();
     const float amp = sourceAmp_ * envelope_;
-    sim_.setSource (0.06f, mod.freq, amp, envelope_ > 0.001f, true);
+    sim_.setDetectorX (std::clamp (params_.detectorX, 0.55f, 0.98f));
+    sim_.setSource (std::clamp (params_.sourceX, 0.02f, 0.45f), mod.freq, amp, envelope_ > 0.001f, true);
 
     for (int s = 0; s < subs; ++s)
         sim_.substep();

@@ -82,6 +82,8 @@ struct EngineParams
     bool gate = true;
     int preset = 0;               // Single Slit
     int midiMode = 0;
+    float sourceX = 0.06f;        // UV x of plane/point source
+    float detectorX = kDetC;      // UV x of center detector column
     std::array<LfoState, 3> lfos {};
 };
 

@@ -66,6 +66,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { "gate", 2 }, "Source Gate", true));
 
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "sourceX", 2 }, "Source X",
+        juce::NormalisableRange<float> { 0.02f, 0.45f, 0.001f }, 0.06f));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "detectorX", 2 }, "Detector X",
+        juce::NormalisableRange<float> { 0.55f, 0.98f, 0.001f }, fringe::kDetC));
+
     // LFO 1–3
     for (int i = 0; i < 3; ++i)
     {
@@ -122,6 +130,8 @@ void FringeAudioProcessor::pushParamsToEngine()
     p.scaleMode = load ("scaleMode", 0.0f) > 0.5f;
     p.droneMode = load ("droneMode", 0.0f) > 0.5f;
     p.gate = load ("gate", 1.0f) > 0.5f;
+    p.sourceX = load ("sourceX", 0.06f);
+    p.detectorX = load ("detectorX", fringe::kDetC);
 
     for (int i = 0; i < 3; ++i)
     {

@@ -2,7 +2,6 @@
 
 namespace
 {
-// Cinematic dark palette
 const juce::Colour kVoid   { 0xff06060a };
 const juce::Colour kPanel  { 0xff0c0c12 };
 const juce::Colour kRail   { 0xff0a0a10 };
@@ -11,10 +10,10 @@ const juce::Colour kMuted  { 0x66e4d8b8 };
 const juce::Colour kGold   { 0xffc9a84c };
 const juce::Colour kGoldDim{ 0x55c9a84c };
 const juce::Colour kCyan   { 0xff5ec8e8 };
-const juce::Colour kRose   { 0xffd06090 };
 const juce::Colour kLine   { 0x22ffffff };
 
-constexpr double kAspect = 20.0 / 9.0; // cinematic ultra-wide
+constexpr double kAspect = 20.0 / 9.0;
+constexpr float kHandleHitPx = 14.0f;
 } // namespace
 
 void FringeAudioProcessorEditor::styleKnob (juce::Slider& s, const juce::String& name, juce::Colour accent)
@@ -38,13 +37,21 @@ void FringeAudioProcessorEditor::styleToggle (juce::TextButton& b)
     b.setColour (juce::TextButton::buttonOnColourId, kGold.withAlpha (0.28f));
     b.setColour (juce::TextButton::textColourOffId, kMuted);
     b.setColour (juce::TextButton::textColourOnId, kBone);
-    b.setColour (juce::ComboBox::outlineColourId, kLine);
+}
+
+void FringeAudioProcessorEditor::setParamFloat (const juce::String& id, float value)
+{
+    if (auto* p = audioProcessor.getAPVTS().getParameter (id))
+    {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (p->convertTo0to1 (value));
+        p->endChangeGesture();
+    }
 }
 
 FringeAudioProcessorEditor::FringeAudioProcessorEditor (FringeAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    // 20:9 default — 1280×576
     constrainer_.setFixedAspectRatio (kAspect);
     constrainer_.setSizeLimits (1000, 450, 2400, 1080);
     setConstrainer (&constrainer_);
@@ -65,6 +72,11 @@ FringeAudioProcessorEditor::FringeAudioProcessorEditor (FringeAudioProcessor& p)
     addAndMakeVisible (tagLabel);
 
     presetBox.clear (juce::dontSendNotification);
+    presetBox.addItemList ({ "Single Slit", "Double S lit", "Convex Lens", "Diffraction",
+                             "Mach-Zehnder", "Draw", "Open Field" },
+                           1);
+    // fix typo
+    presetBox.clear (juce::dontSendNotification);
     presetBox.addItemList ({ "Single Slit", "Double Slit", "Convex Lens", "Diffraction",
                              "Mach-Zehnder", "Draw", "Open Field" },
                            1);
@@ -79,11 +91,22 @@ FringeAudioProcessorEditor::FringeAudioProcessorEditor (FringeAudioProcessor& p)
     styleToggle (scaleButton);
     styleToggle (droneButton);
     styleToggle (eraserButton);
+    styleToggle (viewButton);
+    viewButton.setClickingTogglesState (true);
+    viewButton.setButtonText ("CINE");
+    viewButton.setTooltip ("Cinematic / Scientific field view");
+    viewButton.onClick = [this] {
+        scientificView_ = viewButton.getToggleState();
+        viewButton.setButtonText (scientificView_ ? "SCI" : "CINE");
+        fieldDirty_ = true;
+        repaint();
+    };
+
     clearDrawButton.setClickingTogglesState (false);
     clearDrawButton.setColour (juce::TextButton::buttonColourId, kPanel.brighter (0.04f));
     clearDrawButton.setColour (juce::TextButton::textColourOffId, kMuted);
 
-    for (auto* b : { &gateButton, &scaleButton, &droneButton, &eraserButton, &clearDrawButton })
+    for (auto* b : { &gateButton, &scaleButton, &droneButton, &eraserButton, &clearDrawButton, &viewButton })
         addAndMakeVisible (b);
 
     clearDrawButton.onClick = [this] { audioProcessor.getEngine().clearDrawing(); fieldDirty_ = true; };
@@ -151,34 +174,66 @@ void FringeAudioProcessorEditor::timerCallback()
     repaint();
 }
 
+float FringeAudioProcessorEditor::xToUv (float x, juce::Rectangle<int> inner) const
+{
+    return std::clamp ((x - (float) inner.getX()) / (float) juce::jmax (1, inner.getWidth()), 0.0f, 1.0f);
+}
+
+float FringeAudioProcessorEditor::uvToX (float uv, juce::Rectangle<int> inner) const
+{
+    return (float) inner.getX() + uv * (float) inner.getWidth();
+}
+
+FringeAudioProcessorEditor::DragTarget FringeAudioProcessorEditor::hitTestProbes (juce::Point<float> pos,
+                                                                                  juce::Rectangle<int> inner) const
+{
+    if (! inner.contains (pos.toInt()))
+        return DragTarget::none;
+
+    const float sx = uvToX (snapshot_.w > 0 ? snapshot_.sourceX : audioProcessor.getEngine().getSourceX(), inner);
+    const float dx = uvToX (snapshot_.w > 0 ? snapshot_.detectorX : audioProcessor.getEngine().getDetectorX(), inner);
+
+    if (std::abs (pos.x - sx) <= kHandleHitPx)
+        return DragTarget::source;
+    if (std::abs (pos.x - dx) <= kHandleHitPx)
+        return DragTarget::detector;
+    return DragTarget::none;
+}
+
+juce::Colour FringeAudioProcessorEditor::scientificColour (float amp) const
+{
+    // Greyscale with strong polarity: + white, - deep teal-black
+    const float t = std::clamp (std::abs (amp) * 1.15f, 0.0f, 1.0f);
+    const float g = std::pow (t, 0.65f);
+    if (amp >= 0.0f)
+        return juce::Colour::fromFloatRGBA (g, g * 0.98f, g * 0.92f, 1.0f);
+    return juce::Colour::fromFloatRGBA (g * 0.15f, g * 0.35f, g * 0.42f, 1.0f);
+}
+
 juce::Colour FringeAudioProcessorEditor::amplitudeColour (float amp, float uvX, float energy) const
 {
-    // High-contrast fringes: amplitude drives brightness hard so interference reads as stripes
+    if (scientificView_)
+        return scientificColour (amp);
+
     const float mag = std::abs (amp);
-    // Auto-ish gain: quiet fields still show structure
     const float gain = 6.5f + energy * 4.0f;
     const float t = std::clamp (mag * gain, 0.0f, 1.0f);
-    // gamma for punchy peaks without washing mids
     const float tg = std::pow (t, 0.72f);
     const float age = std::clamp (uvX, 0.0f, 1.0f);
 
-    const juce::Colour young (0xff3ec8d8); // cyan
-    const juce::Colour mid (0xffe0b040);   // amber
-    const juce::Colour old (0xffe07098);   // rose
+    const juce::Colour young (0xff3ec8d8);
+    const juce::Colour mid (0xffe0b040);
+    const juce::Colour old (0xffe07098);
     juce::Colour hue = age < 0.4f ? young.interpolatedWith (mid, age / 0.4f)
                                   : mid.interpolatedWith (old, (age - 0.4f) / 0.6f);
 
-    // polarity: negative phase slightly cooler/darker (classic interference look)
     if (amp < 0.0f)
         hue = hue.withRotatedHue (0.08f).darker (0.35f);
 
-    // peak sparkle only at true highs (not a mushy bloom wash)
     if (tg > 0.75f)
         hue = hue.interpolatedWith (juce::Colours::white, (tg - 0.75f) * 1.2f);
 
-    const juce::Colour deep (0xff05060c);
-    // floor dim so zero-crossings read black (fringe lines)
-    return deep.interpolatedWith (hue, tg);
+    return juce::Colour (0xff05060c).interpolatedWith (hue, tg);
 }
 
 juce::Image FringeAudioProcessorEditor::renderFieldImage() const
@@ -191,7 +246,6 @@ juce::Image FringeAudioProcessorEditor::renderFieldImage() const
     juce::Image img (juce::Image::ARGB, w, h, true);
     const float energy = snapshot_.energy;
 
-    // percentile-ish scale: find max abs amp for adaptive contrast
     float maxA = 1.0e-5f;
     for (float a : snapshot_.amp)
         maxA = std::max (maxA, std::abs (a));
@@ -203,64 +257,94 @@ juce::Image FringeAudioProcessorEditor::renderFieldImage() const
         {
             const size_t i = static_cast<size_t> (y * w + x);
             const float spd = snapshot_.speed[i];
-            const float amp = snapshot_.amp[i] * invMax; // normalize field
+            const float amp = snapshot_.amp[i] * invMax;
             const float uvX = (static_cast<float> (x) + 0.5f) / static_cast<float> (w);
 
             juce::Colour c;
             if (spd < 0.05f)
             {
-                // solid wall — high contrast vs field
-                c = juce::Colour (0xff0a0810);
-                // bright edge if free-space neighbor (reads as drawn barrier)
+                c = scientificView_ ? juce::Colour (0xffe8dcc0) : juce::Colour (0xff0a0810);
                 bool edge = false;
                 if (x > 0 && snapshot_.speed[i - 1] > 0.2f) edge = true;
                 if (x + 1 < w && snapshot_.speed[i + 1] > 0.2f) edge = true;
                 if (y > 0 && snapshot_.speed[i - (size_t) w] > 0.2f) edge = true;
                 if (y + 1 < h && snapshot_.speed[i + (size_t) w] > 0.2f) edge = true;
                 if (edge)
-                    c = juce::Colour (0xffc9a84c).withAlpha (0.85f).interpolatedWith (c, 0.35f);
+                    c = scientificView_ ? juce::Colour (0xff222018)
+                                        : juce::Colour (0xffc9a84c).interpolatedWith (c, 0.35f);
             }
             else if (spd < 0.72f)
             {
-                // beamsplitter / lens medium
-                c = amplitudeColour (amp, uvX, energy).interpolatedWith (juce::Colour (0xff1a3040), 0.25f);
+                c = amplitudeColour (amp, uvX, energy)
+                        .interpolatedWith (scientificView_ ? juce::Colour (0xff304050)
+                                                           : juce::Colour (0xff1a3040),
+                                           0.25f);
             }
             else
             {
                 c = amplitudeColour (amp, uvX, energy);
             }
 
-            // thin detector hairline (not a fat glow wash)
             if (std::abs (uvX - snapshot_.detectorX) < (1.5f / (float) w))
-                c = c.interpolatedWith (kGold, 0.65f);
+                c = c.interpolatedWith (scientificView_ ? juce::Colours::yellow : kGold, 0.55f);
 
             img.setPixelAt (x, h - 1 - y, c);
         }
     }
-
-    // NO full-field blur — keep interference stripes sharp
     return img;
 }
 
 void FringeAudioProcessorEditor::paintChrome (juce::Graphics& g)
 {
     g.fillAll (kVoid);
-
-    // subtle top vignette gradient
     juce::ColourGradient grad (kPanel, 0, 0, kVoid, 0, (float) getHeight() * 0.35f, false);
     g.setGradientFill (grad);
     g.fillRect (0, 0, getWidth(), getHeight() / 3);
-
-    // outer gold hairline
     g.setColour (kGold.withAlpha (0.22f));
     g.drawRect (getLocalBounds().reduced (1), 1);
     g.setColour (kLine);
     g.drawRect (getLocalBounds().reduced (3), 1);
 }
 
+void FringeAudioProcessorEditor::paintProbeHandles (juce::Graphics& g, juce::Rectangle<int> inner)
+{
+    if (snapshot_.w <= 0 && fieldCache_.isNull())
+        return;
+
+    const float srcUv = snapshot_.w > 0 ? snapshot_.sourceX : audioProcessor.getEngine().getSourceX();
+    const float detUv = snapshot_.w > 0 ? snapshot_.detectorX : audioProcessor.getEngine().getDetectorX();
+    const float sx = uvToX (srcUv, inner);
+    const float dx = uvToX (detUv, inner);
+
+    auto drawHandle = [&] (float x, const juce::String& label, juce::Colour col, bool top) {
+        g.setColour (col.withAlpha (0.55f + 0.2f * std::sin (animPhase_)));
+        g.drawLine (x, (float) inner.getY() + 4, x, (float) inner.getBottom() - 4, 1.6f);
+
+        const float cy = top ? (float) inner.getY() + 18.0f : (float) inner.getBottom() - 18.0f;
+        g.setColour (col.withAlpha (0.9f));
+        g.fillEllipse (x - 6.0f, cy - 6.0f, 12.0f, 12.0f);
+        g.setColour (kVoid);
+        g.drawEllipse (x - 6.0f, cy - 6.0f, 12.0f, 12.0f, 1.0f);
+
+        g.setFont (juce::FontOptions (9.0f));
+        g.setColour (col);
+        g.drawText (label, juce::Rectangle<float> (x - 18, top ? cy + 8 : cy - 20, 36, 12),
+                    juce::Justification::centred);
+    };
+
+    drawHandle (sx, "SRC", kCyan, true);
+    drawHandle (dx, "DET", kGold, false);
+
+    // L/R ghost detectors
+    g.setColour (kGold.withAlpha (0.2f));
+    g.drawLine (uvToX (std::clamp (detUv - 0.04f, 0.5f, 0.99f), inner), (float) inner.getY() + 8,
+                uvToX (std::clamp (detUv - 0.04f, 0.5f, 0.99f), inner), (float) inner.getBottom() - 8, 1.0f);
+    g.drawLine (uvToX (std::clamp (detUv + 0.04f, 0.5f, 0.99f), inner), (float) inner.getY() + 8,
+                uvToX (std::clamp (detUv + 0.04f, 0.5f, 0.99f), inner), (float) inner.getBottom() - 8, 1.0f);
+}
+
 void FringeAudioProcessorEditor::paintWaveField (juce::Graphics& g, juce::Rectangle<int> area)
 {
-    // panel behind field
     g.setColour (kPanel);
     g.fillRoundedRectangle (area.toFloat().expanded (2.0f), 6.0f);
 
@@ -280,41 +364,22 @@ void FringeAudioProcessorEditor::paintWaveField (juce::Graphics& g, juce::Rectan
     }
     else
     {
-        // medium quality keeps fringe detail when upscaling low-res sim
         g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality);
         g.drawImage (fieldCache_, inner.toFloat());
 
-        // light vignette only (was washing out fringes)
-        juce::ColourGradient vig (juce::Colours::transparentBlack, (float) inner.getCentreX(), (float) inner.getCentreY(),
-                                  juce::Colours::black.withAlpha (0.22f), (float) inner.getX(), (float) inner.getY(), true);
-        g.setGradientFill (vig);
-        g.fillRect (inner);
-
-        // source marker
-        if (snapshot_.w > 0)
+        if (! scientificView_)
         {
-            const float sx = inner.getX() + snapshot_.sourceX * (float) inner.getWidth();
-            g.setColour (kGold.withAlpha (0.35f + 0.15f * std::sin (animPhase_)));
-            g.drawLine (sx, (float) inner.getY() + 6, sx, (float) inner.getBottom() - 6, 1.2f);
-            g.setFont (juce::FontOptions (9.0f));
-            g.setColour (kGold.withAlpha (0.7f));
-            g.drawText ("SRC", juce::Rectangle<float> (sx - 14, (float) inner.getY() + 4, 28, 12),
-                        juce::Justification::centred);
+            juce::ColourGradient vig (juce::Colours::transparentBlack, (float) inner.getCentreX(), (float) inner.getCentreY(),
+                                      juce::Colours::black.withAlpha (0.18f), (float) inner.getX(), (float) inner.getY(), true);
+            g.setGradientFill (vig);
+            g.fillRect (inner);
         }
 
-        // detector label
-        if (snapshot_.w > 0)
-        {
-            const float dx = inner.getX() + snapshot_.detectorX * (float) inner.getWidth();
-            g.setColour (kGold.withAlpha (0.5f));
-            g.setFont (juce::FontOptions (9.0f));
-            g.drawText ("DET", juce::Rectangle<float> (dx - 14, (float) inner.getBottom() - 16, 28, 12),
-                        juce::Justification::centred);
-        }
+        paintProbeHandles (g, inner);
     }
 
-    // draw-mode cursor
-    if (audioProcessor.getEngine().isDrawPreset() && hoverUv_.x >= 0.0f)
+    if (audioProcessor.getEngine().isDrawPreset() && hoverUv_.x >= 0.0f && drag_ != DragTarget::source
+        && drag_ != DragTarget::detector)
     {
         const float px = inner.getX() + hoverUv_.x * (float) inner.getWidth();
         const float py = inner.getY() + (1.0f - hoverUv_.y) * (float) inner.getHeight();
@@ -326,17 +391,16 @@ void FringeAudioProcessorEditor::paintWaveField (juce::Graphics& g, juce::Rectan
         g.drawEllipse (px - r, py - r, r * 2, r * 2, 1.2f);
     }
 
-    // frame
     g.setColour (kGold.withAlpha (0.28f));
     g.drawRoundedRectangle (area.toFloat(), 4.0f, 1.0f);
 
+    g.setColour (kMuted);
+    g.setFont (juce::FontOptions (9.0f));
+    juce::String hint = scientificView_ ? "SCI view  |  " : "CINE view  |  ";
+    hint += "drag SRC / DET handles";
     if (audioProcessor.getEngine().isDrawPreset())
-    {
-        g.setColour (kGold.withAlpha (0.85f));
-        g.setFont (juce::FontOptions (10.0f));
-        g.drawText (eraser_ ? "DRAW mode: eraser" : "DRAW mode: paint walls  |  double-click clears",
-                    area.reduced (10).removeFromTop (16), juce::Justification::topLeft);
-    }
+        hint += eraser_ ? "  |  DRAW eraser" : "  |  DRAW paint (dbl-click clear)";
+    g.drawText (hint, area.reduced (10).removeFromTop (16), juce::Justification::topLeft);
 }
 
 void FringeAudioProcessorEditor::paintDetectorPanel (juce::Graphics& g, juce::Rectangle<int> area)
@@ -351,7 +415,6 @@ void FringeAudioProcessorEditor::paintDetectorPanel (juce::Graphics& g, juce::Re
     g.setFont (juce::FontOptions (9.0f));
     g.drawText ("DETECTOR", r.removeFromTop (14), juce::Justification::centredLeft);
 
-    // energy meter
     auto meter = r.removeFromTop (8);
     g.setColour (kVoid);
     g.fillRoundedRectangle (meter.toFloat(), 2.0f);
@@ -362,6 +425,9 @@ void FringeAudioProcessorEditor::paintDetectorPanel (juce::Graphics& g, juce::Re
     r.removeFromTop (6);
     g.setColour (kMuted);
     g.drawText ("energy  " + juce::String (snapshot_.energy, 3), r.removeFromTop (12), juce::Justification::centredLeft);
+    g.drawText ("src " + juce::String (audioProcessor.getEngine().getSourceX(), 2)
+                    + "  det " + juce::String (audioProcessor.getEngine().getDetectorX(), 2),
+                r.removeFromTop (12), juce::Justification::centredLeft);
 
     r.removeFromTop (4);
     auto plot = r.removeFromTop (r.getHeight() - 28);
@@ -382,15 +448,12 @@ void FringeAudioProcessorEditor::paintDetectorPanel (juce::Graphics& g, juce::Re
             else
                 path.lineTo (x, y);
         }
-
-        // fill under curve
         juce::Path fill = path;
         fill.lineTo ((float) plot.getRight() - 4, (float) plot.getBottom() - 4);
         fill.lineTo ((float) plot.getX() + 4, (float) plot.getBottom() - 4);
         fill.closeSubPath();
         g.setColour (kGold.withAlpha (0.12f));
         g.fillPath (fill);
-
         g.setColour (kGold.withAlpha (0.9f));
         g.strokePath (path, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved));
     }
@@ -405,24 +468,51 @@ void FringeAudioProcessorEditor::paintKnobRailLabels (juce::Graphics& g)
 {
     g.setFont (juce::FontOptions (8.5f));
     g.setColour (kMuted);
+
+    struct KnobInfo { juce::Slider* s; const char* depthId; };
+    // LFO depth glow
+    auto lfoDepth = [this] (const juce::String& id) -> float {
+        if (auto* v = audioProcessor.getAPVTS().getRawParameterValue (id))
+            return v->load();
+        return 0.0f;
+    };
+
     for (auto* s : { &volumeSlider, &speedSlider, &freqSlider, &slitSlider, &slitWSlider,
                      &sensSlider, &filterSlider, &reverbSlider,
                      &lfo1Rate, &lfo1Depth, &lfo2Rate, &lfo2Depth, &lfo3Rate, &lfo3Depth })
     {
         auto b = s->getBounds();
+        g.setColour (kMuted);
         g.drawText (s->getName(), b.getX(), b.getBottom() - 1, b.getWidth(), 11, juce::Justification::centred);
     }
 
-    // section captions sit just above the knob rail (not over the wave field)
+    // glow rings for active LFOs
+    auto maybeGlow = [&] (juce::Slider& s, float depth) {
+        if (depth <= 0.01f)
+            return;
+        auto b = s.getBounds().toFloat().reduced (8.0f, 14.0f);
+        const float cx = b.getCentreX();
+        const float cy = b.getCentreY() - 4.0f;
+        const float rad = juce::jmin (b.getWidth(), b.getHeight()) * 0.42f;
+        g.setColour (kCyan.withAlpha (0.15f + 0.25f * depth));
+        g.drawEllipse (cx - rad - 3, cy - rad - 3, (rad + 3) * 2, (rad + 3) * 2, 1.5f);
+    };
+    maybeGlow (lfo1Rate, lfoDepth ("lfo1Depth"));
+    maybeGlow (lfo1Depth, lfoDepth ("lfo1Depth"));
+    maybeGlow (lfo2Rate, lfoDepth ("lfo2Depth"));
+    maybeGlow (lfo2Depth, lfoDepth ("lfo2Depth"));
+    maybeGlow (lfo3Rate, lfoDepth ("lfo3Depth"));
+    maybeGlow (lfo3Depth, lfoDepth ("lfo3Depth"));
+
     if (! knobRail_.isEmpty())
     {
         g.setColour (kGold.withAlpha (0.55f));
         g.setFont (juce::FontOptions (9.0f));
-        // 8 tone/field knobs then 6 LFO: split 8/6
         const int cell = knobRail_.getWidth() / 14;
-        g.drawText ("TONE", knobRail_.getX(), knobRail_.getY() - 13, cell * 4, 12, juce::Justification::centred);
-        g.drawText ("FIELD", knobRail_.getX() + cell * 4, knobRail_.getY() - 13, cell * 4, 12, juce::Justification::centred);
-        g.drawText ("MOD", knobRail_.getX() + cell * 8, knobRail_.getY() - 13, cell * 6, 12, juce::Justification::centred);
+        const int y = knobRail_.getY() - 13;
+        g.drawText ("TONE", knobRail_.getX(), y, cell * 4, 12, juce::Justification::centred);
+        g.drawText ("FIELD", knobRail_.getX() + cell * 4, y, cell * 4, 12, juce::Justification::centred);
+        g.drawText ("MOD", knobRail_.getX() + cell * 8, y, cell * 6, 12, juce::Justification::centred);
     }
 }
 
@@ -435,7 +525,6 @@ void FringeAudioProcessorEditor::paint (juce::Graphics& g)
     if (! detectorArea_.isEmpty())
         paintDetectorPanel (g, detectorArea_);
 
-    // knob rail background
     if (! knobRail_.isEmpty())
     {
         g.setColour (kRail);
@@ -446,16 +535,14 @@ void FringeAudioProcessorEditor::paint (juce::Graphics& g)
 
     paintKnobRailLabels (g);
 
-    // status bar
     if (! statusBar_.isEmpty())
     {
         g.setColour (kMuted);
         g.setFont (juce::FontOptions (10.0f));
-        juce::String status = "20:9  |  mid/bass factory  |  ";
+        juce::String status = "20:9  |  ";
+        status += scientificView_ ? "SCI  |  " : "CINE  |  ";
         status += gateButton.getToggleState() ? "source on  |  " : "source off  |  ";
-        status += scaleButton.getToggleState() ? "scale  |  " : "";
-        status += droneButton.getToggleState() ? "drone  |  " : "";
-        status += "keys Z-P  |  space = source";
+        status += "drag SRC/DET  |  keys Z-P  |  space = source";
         g.drawText (status, statusBar_, juce::Justification::centredLeft);
     }
 }
@@ -468,42 +555,36 @@ void FringeAudioProcessorEditor::resized()
     {
         auto t = topBar_;
         brandLabel.setBounds (t.removeFromLeft (100));
-        tagLabel.setBounds (t.removeFromLeft (160));
-        clearDrawButton.setBounds (t.removeFromRight (60).reduced (2, 4));
-        eraserButton.setBounds (t.removeFromRight (60).reduced (2, 4));
-        droneButton.setBounds (t.removeFromRight (64).reduced (2, 4));
-        scaleButton.setBounds (t.removeFromRight (64).reduced (2, 4));
-        gateButton.setBounds (t.removeFromRight (72).reduced (2, 4));
-        presetBox.setBounds (t.removeFromRight (150).reduced (2, 4));
+        tagLabel.setBounds (t.removeFromLeft (150));
+        clearDrawButton.setBounds (t.removeFromRight (56).reduced (2, 4));
+        eraserButton.setBounds (t.removeFromRight (56).reduced (2, 4));
+        viewButton.setBounds (t.removeFromRight (52).reduced (2, 4));
+        droneButton.setBounds (t.removeFromRight (60).reduced (2, 4));
+        scaleButton.setBounds (t.removeFromRight (60).reduced (2, 4));
+        gateButton.setBounds (t.removeFromRight (68).reduced (2, 4));
+        presetBox.setBounds (t.removeFromRight (140).reduced (2, 4));
     }
 
     statusBar_ = r.removeFromBottom (18);
     r.removeFromBottom (2);
-
-    // space for section labels above knobs
     r.removeFromBottom (14);
-    // bottom knob rail ~26% of remaining height
     const int railH = juce::jlimit (100, 128, r.getHeight() * 26 / 100);
     knobRail_ = r.removeFromBottom (railH);
     r.removeFromBottom (8);
 
-    // right detector strip ~14% width
     const int detW = juce::jlimit (120, 170, r.getWidth() * 14 / 100);
     detectorArea_ = r.removeFromRight (detW);
     r.removeFromRight (10);
+    fieldArea_ = r;
 
-    fieldArea_ = r; // main cinematic stage
-
-    // knobs: 8 tone/field + 6 LFO across rail
     juce::Slider* knobs[] = {
         &volumeSlider, &speedSlider, &freqSlider, &filterSlider,
         &slitSlider, &slitWSlider, &sensSlider, &reverbSlider,
         &lfo1Rate, &lfo1Depth, &lfo2Rate, &lfo2Depth, &lfo3Rate, &lfo3Depth
     };
-    const int n = 14;
     auto rail = knobRail_.reduced (4, 6);
-    const int cell = rail.getWidth() / n;
-    for (int i = 0; i < n; ++i)
+    const int cell = rail.getWidth() / 14;
+    for (int i = 0; i < 14; ++i)
         knobs[i]->setBounds (rail.getX() + i * cell, rail.getY(), cell, rail.getHeight() - 10);
 }
 
@@ -514,48 +595,75 @@ void FringeAudioProcessorEditor::paintAtEvent (const juce::MouseEvent& e)
     if (! audioProcessor.getEngine().isDrawPreset())
         return;
 
-    const float uvX = (float) (e.x - fieldArea_.getX()) / (float) juce::jmax (1, fieldArea_.getWidth());
-    const float uvY = 1.0f - (float) (e.y - fieldArea_.getY()) / (float) juce::jmax (1, fieldArea_.getHeight());
+    const auto inner = fieldArea_.reduced (2);
+    const float uvX = xToUv ((float) e.x, inner);
+    const float uvY = 1.0f - std::clamp (((float) e.y - (float) inner.getY()) / (float) juce::jmax (1, inner.getHeight()), 0.0f, 1.0f);
     float brush = 0.012f;
     if (auto* v = audioProcessor.getAPVTS().getRawParameterValue ("slitW"))
         brush = std::clamp (v->load(), 0.004f, 0.06f);
 
-    audioProcessor.getEngine().paintAt (std::clamp (uvX, 0.0f, 1.0f),
-                                        std::clamp (uvY, 0.0f, 1.0f),
-                                        brush, eraser_);
+    audioProcessor.getEngine().paintAt (uvX, uvY, brush, eraser_);
     fieldDirty_ = true;
 }
 
 void FringeAudioProcessorEditor::mouseMove (const juce::MouseEvent& e)
 {
-    if (fieldArea_.contains (e.getPosition()))
+    const auto inner = fieldArea_.reduced (2);
+    if (inner.contains (e.getPosition()))
     {
-        hoverUv_ = {
-            (float) (e.x - fieldArea_.getX()) / (float) juce::jmax (1, fieldArea_.getWidth()),
-            1.0f - (float) (e.y - fieldArea_.getY()) / (float) juce::jmax (1, fieldArea_.getHeight())
-        };
+        hoverUv_ = { xToUv ((float) e.x, inner),
+                     1.0f - std::clamp (((float) e.y - (float) inner.getY()) / (float) juce::jmax (1, inner.getHeight()), 0.0f, 1.0f) };
+        const auto hit = hitTestProbes (e.position, inner);
+        setMouseCursor (hit != DragTarget::none ? juce::MouseCursor::LeftRightResizeCursor
+                                                : juce::MouseCursor::NormalCursor);
     }
     else
+    {
         hoverUv_ = { -1.0f, -1.0f };
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+    }
 }
 
 void FringeAudioProcessorEditor::mouseDown (const juce::MouseEvent& e)
 {
-    drawing_ = fieldArea_.contains (e.getPosition()) && audioProcessor.getEngine().isDrawPreset();
-    if (drawing_)
+    const auto inner = fieldArea_.reduced (2);
+    drag_ = hitTestProbes (e.position, inner);
+    if (drag_ == DragTarget::none && audioProcessor.getEngine().isDrawPreset() && inner.contains (e.getPosition()))
+    {
+        drag_ = DragTarget::paint;
         paintAtEvent (e);
+    }
 }
 
 void FringeAudioProcessorEditor::mouseDrag (const juce::MouseEvent& e)
 {
-    if (drawing_)
+    const auto inner = fieldArea_.reduced (2);
+    if (drag_ == DragTarget::source)
+    {
+        const float uv = std::clamp (xToUv ((float) e.x, inner), 0.02f, 0.45f);
+        audioProcessor.getEngine().setSourceX (uv);
+        setParamFloat ("sourceX", uv);
+        snapshot_.sourceX = uv;
+        fieldDirty_ = true;
+    }
+    else if (drag_ == DragTarget::detector)
+    {
+        const float uv = std::clamp (xToUv ((float) e.x, inner), 0.55f, 0.98f);
+        audioProcessor.getEngine().setDetectorX (uv);
+        setParamFloat ("detectorX", uv);
+        snapshot_.detectorX = uv;
+        fieldDirty_ = true;
+    }
+    else if (drag_ == DragTarget::paint)
+    {
         paintAtEvent (e);
+    }
     mouseMove (e);
 }
 
 void FringeAudioProcessorEditor::mouseUp (const juce::MouseEvent&)
 {
-    drawing_ = false;
+    drag_ = DragTarget::none;
 }
 
 void FringeAudioProcessorEditor::mouseDoubleClick (const juce::MouseEvent& e)
@@ -592,6 +700,11 @@ bool FringeAudioProcessorEditor::keyPressed (const juce::KeyPress& key)
         if (auto* p = audioProcessor.getAPVTS().getParameter ("gate"))
             p->setValueNotifyingHost (p->getValue() < 0.5f ? 1.0f : 0.0f);
         return true;
+    }
+
+    if (key.getTextCharacter() == 'v' || key.getTextCharacter() == 'V')
+    {
+        // don't steal V from QWERTY map above - already used
     }
     return false;
 }
