@@ -29,6 +29,7 @@ void FringeEngine::reset()
     sourceOn_ = true;
     sourceAmp_ = 0.02f;
     pulseSamplesLeft_ = 0;
+    wavefrontPulse_ = false;
     simAccum_ = 0.0;
 }
 
@@ -138,11 +139,27 @@ void FringeEngine::noteOn (int note, float velocity)
     sourceAmp_ = midiVelocityToAmp (std::clamp (velocity, 0.0f, 1.0f));
     sourceOn_ = true;
     envelope_ = 1.0f;
+    wavefrontPulse_ = false;
 
     if (params_.midiMode == 0)
         pulseSamplesLeft_ = static_cast<int> (0.010 * sampleRate_);
     else
         pulseSamplesLeft_ = -1;
+}
+
+void FringeEngine::fireWavefront (float velocity)
+{
+    // Spacebar / manual strike: short, strong source packet → clear propagating front
+    const float v = std::clamp (velocity, 0.0f, 1.0f);
+    sourceAmp_ = 0.035f + v * 0.055f; // stronger than continuous drip
+    sourceOn_ = true;
+    envelope_ = 1.0f;
+    wavefrontPulse_ = true;
+    // ~45 ms of injection — enough cycles at low sim freq for a visible crest
+    pulseSamplesLeft_ = static_cast<int> (0.045 * sampleRate_);
+    // Don't latch enhanced hold note
+    if (params_.midiMode != 1)
+        activeNote_ = -1;
 }
 
 void FringeEngine::noteOff (int note)
@@ -152,6 +169,7 @@ void FringeEngine::noteOff (int note)
         sourceOn_ = false;
         pulseSamplesLeft_ = 0;
         activeNote_ = -1;
+        wavefrontPulse_ = false;
     }
 }
 
@@ -160,8 +178,13 @@ void FringeEngine::applyGateAndEnvelope()
     if (pulseSamplesLeft_ > 0)
     {
         --pulseSamplesLeft_;
-        if (pulseSamplesLeft_ == 0 && params_.midiMode == 0 && ! params_.gate)
-            sourceOn_ = false;
+        if (pulseSamplesLeft_ == 0)
+        {
+            wavefrontPulse_ = false;
+            // After a wavefront pulse: return to continuous gate level or off
+            if (params_.midiMode == 0 && ! params_.gate && activeNote_ < 0)
+                sourceOn_ = false;
+        }
     }
 
     const bool wantOn = params_.gate || pulseSamplesLeft_ > 0
@@ -170,9 +193,10 @@ void FringeEngine::applyGateAndEnvelope()
     if (wantOn)
     {
         sourceOn_ = true;
-        if (params_.gate && pulseSamplesLeft_ <= 0 && activeNote_ < 0)
-            sourceAmp_ = 0.032f; // slightly fuller continuous body
-        envelope_ += (1.0f - envelope_) * 0.1f;
+        // Don't stomp amplitude while a wavefront/MIDI pulse is active
+        if (params_.gate && pulseSamplesLeft_ <= 0 && activeNote_ < 0 && ! wavefrontPulse_)
+            sourceAmp_ = 0.032f;
+        envelope_ += (1.0f - envelope_) * 0.15f;
     }
     else
     {

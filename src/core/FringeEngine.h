@@ -21,6 +21,8 @@ public:
 
     void noteOn (int note, float velocity);
     void noteOff (int note);
+    /** Fire a short source pulse — emits a visible/audible wavefront packet. */
+    void fireWavefront (float velocity = 0.9f);
     void process (float* left, float* right, int numSamples);
 
     bool pullSnapshot (FieldSnapshot& out);
@@ -63,6 +65,7 @@ private:
     float envelope_ = 1.0f;
     int pulseSamplesLeft_ = 0;
     int activeNote_ = -1;
+    bool wavefrontPulse_ = false;
 
     double simAccum_ = 0.0;
 

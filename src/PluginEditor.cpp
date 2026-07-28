@@ -681,7 +681,7 @@ void FringeAudioProcessorEditor::paint (juce::Graphics& g)
         juce::String status = "20:9  |  ";
         status += scientificView_ ? "SCI  |  " : "CINE  |  ";
         status += gateButton.getToggleState() ? "source on  |  " : "source off  |  ";
-        status += "drag SRC/DET  |  keys Z-P  |  space = source";
+        status += "drag SRC/DET  |  keys Z-P  |  space = wavefront";
         g.drawText (status, statusBar_, juce::Justification::centredLeft);
     }
 }
@@ -836,14 +836,10 @@ bool FringeAudioProcessorEditor::keyPressed (const juce::KeyPress& key)
 
     if (key == juce::KeyPress::spaceKey)
     {
-        if (auto* p = audioProcessor.getAPVTS().getParameter ("gate"))
-            p->setValueNotifyingHost (p->getValue() < 0.5f ? 1.0f : 0.0f);
+        // Emit a wavefront packet (does not toggle continuous SOURCE)
+        audioProcessor.getEngine().fireWavefront (0.95f);
         return true;
     }
 
-    if (key.getTextCharacter() == 'v' || key.getTextCharacter() == 'V')
-    {
-        // don't steal V from QWERTY map above - already used
-    }
     return false;
 }
