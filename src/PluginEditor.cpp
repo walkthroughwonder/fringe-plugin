@@ -59,7 +59,7 @@ FringeAudioProcessorEditor::FringeAudioProcessorEditor (FringeAudioProcessor& p)
     setSize (1280, 576);
     setWantsKeyboardFocus (true);
 
-    brandLabel.setText ("FRINGE  1.0", juce::dontSendNotification);
+    brandLabel.setText ("FRINGE  1.1", juce::dontSendNotification);
     brandLabel.setFont (juce::FontOptions (22.0f).withStyle ("Bold"));
     brandLabel.setColour (juce::Label::textColourId, kBone);
     brandLabel.setJustificationType (juce::Justification::centredLeft);

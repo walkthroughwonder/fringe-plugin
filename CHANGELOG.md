@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0 — multi-platform (in progress)
+
+### Packaging & platforms
+- **macOS universal** (`arm64` + `x86_64`) via CI / `FRINGE_UNIVERSAL=1`
+- **AU** included when built with full Xcode (`FRINGE_FORCE_AU` on CI)
+- **CLAP** via [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions)
+- **Windows** VST3 + Standalone + CLAP (GitHub Actions)
+- **Linux** VST3 + Standalone + CLAP (GitHub Actions)
+- Developer ID **sign + notarize** scripts (secrets-driven; optional)
+
+See `docs/SIGNING_AND_NOTARIZATION.md` and `scripts/package_release.sh`.
+
+---
+
 ## 1.0.0 — 2026-07-28
 
 First public release of **Fringe** as a native audio plugin.
@@ -22,23 +36,9 @@ First public release of **Fringe** as a native audio plugin.
 - Detector scope + energy meter
 - LFO activity glow on knobs
 
-### Formats (this release)
-- **macOS VST3** (x86_64 Intel)
-- **macOS Standalone** (x86_64 Intel)
-- AU when built with full Xcode (not in CLT-only CI images by default)
+### Formats (1.0.0 zip)
+- macOS VST3 + Standalone (x86_64 Intel)
+- Ad-hoc signature
 
 ### License
 - GPL-3.0 (open source; JUCE under GPL)
-
-### Known limitations
-- Intel Mac binary in the zip (Apple Silicon: use Rosetta, or build from source / CI universal later)
-- Ad-hoc code signature (Gatekeeper may require Open Anyway)
-- Not notarized with Apple Developer ID
-- No Windows/Linux builds in this release
-- CLAP deferred
-
----
-
-## 0.x development
-
-Internal milestones: scaffold → DSP port → warm defaults → 20:9 UI → interactive field → wavefront spacebar.

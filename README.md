@@ -1,65 +1,78 @@
-# Fringe 1.0
+# Fringe 1.1
 
 **Photonic synthesizer** — wave optics as a playable instrument.
 
-Port of the browser instrument: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
+Port of: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
 
-![Fringe](https://img.shields.io/badge/version-1.0.0-c9a84c) ![platform](https://img.shields.io/badge/macOS-Intel%20VST3-blue) ![license](https://img.shields.io/badge/license-GPL--3.0-green)
+![version](https://img.shields.io/badge/version-1.1.0-c9a84c) ![license](https://img.shields.io/badge/license-GPL--3.0-green)
 
 ## Download
 
-**[Releases → Fringe 1.0.0](https://github.com/walkthroughwonder/fringe-plugin/releases)**  
-See [INSTALL.md](INSTALL.md) for DAW setup (Renoise, etc.).
+**[GitHub Releases](https://github.com/walkthroughwonder/fringe-plugin/releases)**
 
-## What it is
+| Asset | Contents |
+|-------|----------|
+| `Fringe-*-macOS-universal.zip` | VST3 + AU + Standalone + CLAP (CI, arm64+x86_64) |
+| `Fringe-*-macOS-x86_64.zip` | Local Intel build (VST3 + Standalone ± CLAP) |
+| `Fringe-*-Windows-x64.zip` | VST3 + Standalone + CLAP |
+| `Fringe-*-Linux-x86_64.zip` | VST3 + Standalone + CLAP |
 
-A **VST3 / Standalone** instrument that runs a real-time **FDTD wave field**, sonifies three detector columns, and treats optics (slits, lenses, draw-your-own walls) as the synthesis engine.
+See [INSTALL.md](INSTALL.md).
 
-### Highlights
-- Live supersampled wave display (CINE / SCI views)
-- Drag **source** and **detector** on the field
-- Presets: Single/Double Slit, Lens, Diffraction, Mach–Zehnder, Draw, Open Field
-- Scale / drone modes, FDN reverb, 3 LFOs
-- **Space** = wavefront pulse · QWERTY + MIDI
-
-## Formats (1.0.0)
-
-| Format | Status |
-|--------|--------|
-| macOS VST3 (Intel) | ✅ Release zip |
-| macOS Standalone (Intel) | ✅ Release zip |
-| macOS AU | Build with full Xcode |
-| Apple Silicon native | Build from source / upcoming CI |
-| Windows / Linux / CLAP | Post-1.0 |
+## Features
+- Live FDTD wave field · drag SRC/DET · CINE/SCI views  
+- Presets: slits, lens, Mach–Zehnder, freehand draw  
+- Scale/drone · FDN reverb · 3 LFOs · Space = wavefront  
+- MIDI + QWERTY  
 
 ## Build
 
+### macOS (recommended flags for 1.1)
+
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+# Universal + CLAP (needs Xcode for AU)
+cmake -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+  -DFRINGE_BUILD_CLAP=ON
+
 cmake --build build --config Release -j
+./scripts/package_release.sh   # FRINGE_UNIVERSAL=1 for universal zip name
 ```
 
-Package a release zip:
+### Windows / Linux
 
 ```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DFRINGE_BUILD_CLAP=ON
+cmake --build build --config Release -j
 ./scripts/package_release.sh
-# → dist/Fringe-1.0.0-macOS-Intel.zip
 ```
+
+### Notarized macOS (Developer ID)
+
+```bash
+export APPLE_DEVELOPER_ID="Developer ID Application: …"
+export APPLE_TEAM_ID="…"
+# + API key or app-specific password — see docs/SIGNING_AND_NOTARIZATION.md
+./scripts/package_release.sh
+```
+
+## CI
+
+| Workflow | Platforms |
+|----------|-----------|
+| `.github/workflows/build.yml` | macOS universal (AU+VST3+CLAP), Windows, Linux |
+
+Tag `v1.1.0` to attach release zips. Add Apple secrets for notarization.
 
 ## Docs
-
-- [INSTALL.md](INSTALL.md) — install & first play  
-- [CHANGELOG.md](CHANGELOG.md) — 1.0 notes  
-- [docs/PRODUCT_DECISIONS.md](docs/PRODUCT_DECISIONS.md) — design locks  
-- [docs/RENOISE.md](docs/RENOISE.md) — Renoise tips  
-- [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — limitations  
+- [INSTALL.md](INSTALL.md)  
+- [CHANGELOG.md](CHANGELOG.md)  
+- [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)  
+- [docs/SIGNING_AND_NOTARIZATION.md](docs/SIGNING_AND_NOTARIZATION.md)  
+- [docs/PRODUCT_DECISIONS.md](docs/PRODUCT_DECISIONS.md)  
 
 ## License
 
-**GPL-3.0** (open source). Uses the JUCE framework under GPL.  
-Commercial closed-source distribution requires a commercial JUCE license.
+**GPL-3.0**. JUCE under GPL. Closed-source shipping needs a commercial JUCE license.
 
-## Credits
-
-**Edwin Rosero** — concept, web Fringe, plugin  
-Manufacturer code `EdRo` · plugin code `Frng`
+**Edwin Rosero** · `EdRo` / `Frng`

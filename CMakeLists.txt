@@ -1,16 +1,33 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Fringe VERSION 1.0.0 LANGUAGES C CXX)
+# ---------------------------------------------------------------------------
+# Fringe 1.1 — multi-platform photonic synthesizer
+# ---------------------------------------------------------------------------
+# Options (common):
+#   -DFRINGE_BUILD_CLAP=ON|OFF
+#   -DFRINGE_FORCE_AU=ON|OFF          # fail if AU requested but Xcode missing
+#   -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"  # universal macOS
+# ---------------------------------------------------------------------------
+
+project(Fringe VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS")
+endif()
+
 option(FRINGE_BUILD_TESTS "Build unit tests" OFF)
+option(FRINGE_BUILD_CLAP "Build CLAP via clap-juce-extensions" ON)
+option(FRINGE_FORCE_AU "Require AU format on macOS (needs full Xcode)" OFF)
+option(FRINGE_COPY_PLUGIN_AFTER_BUILD "Install plugins to user dirs after build" ON)
 
 include(FetchContent)
 set(FETCHCONTENT_QUIET ON)
 
+# ---- JUCE -----------------------------------------------------------------
 FetchContent_Declare(
   juce
   GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
@@ -19,7 +36,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(juce)
 
+# ---- Formats --------------------------------------------------------------
 set(FRINGE_FORMATS VST3 Standalone)
+
 if(APPLE)
   execute_process(
     COMMAND xcodebuild -version
@@ -28,10 +47,24 @@ if(APPLE)
   )
   if(_xcode_ok EQUAL 0)
     list(APPEND FRINGE_FORMATS AU)
-    message(STATUS "Full Xcode found — building AU + VST3 + Standalone")
+    message(STATUS "Full Xcode — AU + VST3 + Standalone")
   else()
-    message(STATUS "Command Line Tools only — building VST3 + Standalone (no AU)")
+    if(FRINGE_FORCE_AU)
+      message(FATAL_ERROR "FRINGE_FORCE_AU=ON but full Xcode is not available (only Command Line Tools).")
+    endif()
+    message(STATUS "CLT only — VST3 + Standalone (no AU). Install Xcode for AU.")
   endif()
+
+  if(CMAKE_OSX_ARCHITECTURES)
+    message(STATUS "macOS architectures: ${CMAKE_OSX_ARCHITECTURES}")
+  else()
+    message(STATUS "macOS architectures: host default (${CMAKE_SYSTEM_PROCESSOR})")
+  endif()
+endif()
+
+set(_copy_flag FALSE)
+if(FRINGE_COPY_PLUGIN_AFTER_BUILD)
+  set(_copy_flag TRUE)
 endif()
 
 juce_add_plugin(Fringe
@@ -44,7 +77,7 @@ juce_add_plugin(Fringe
   NEEDS_MIDI_OUTPUT FALSE
   IS_MIDI_EFFECT FALSE
   EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-  COPY_PLUGIN_AFTER_BUILD TRUE
+  COPY_PLUGIN_AFTER_BUILD ${_copy_flag}
   PLUGIN_MANUFACTURER_CODE EdRo
   PLUGIN_CODE Frng
   FORMATS ${FRINGE_FORMATS}
@@ -76,7 +109,6 @@ set(FRINGE_SOURCES
 )
 
 target_sources(Fringe PRIVATE ${FRINGE_SOURCES})
-
 target_include_directories(Fringe PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_compile_definitions(Fringe
@@ -99,4 +131,29 @@ target_link_libraries(Fringe
     juce::juce_recommended_warning_flags
 )
 
+# ---- CLAP (unofficial extensions) ----------------------------------------
+if(FRINGE_BUILD_CLAP)
+  FetchContent_Declare(
+    clap-juce-extensions
+    GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
+    GIT_TAG        main
+    GIT_SUBMODULES_RECURSE TRUE
+  )
+  FetchContent_MakeAvailable(clap-juce-extensions)
+
+  clap_juce_extensions_plugin(
+    TARGET Fringe
+    CLAP_ID "com.edwinrosero.fringe"
+    CLAP_FEATURES instrument synthesizer
+    CLAP_MANUAL_URL "https://edwinrosero.com/fringe/"
+    CLAP_SUPPORT_URL "https://github.com/walkthroughwonder/fringe-plugin"
+  )
+  message(STATUS "CLAP target enabled (Fringe_CLAP)")
+else()
+  message(STATUS "CLAP disabled (FRINGE_BUILD_CLAP=OFF)")
+endif()
+
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "Source" FILES ${FRINGE_SOURCES})
+
+# Print summary
+message(STATUS "Fringe ${PROJECT_VERSION} formats: ${FRINGE_FORMATS}")

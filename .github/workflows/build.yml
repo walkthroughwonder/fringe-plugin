@@ -1,0 +1,173 @@
+# Continuous multi-platform builds (push / PR / release tag)
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS universal (arm64 + x86_64) — full Xcode → AU + VST3 + Standalone + CLAP
+  # ---------------------------------------------------------------------------
+  macos-universal:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure universal
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DFRINGE_BUILD_CLAP=ON \
+            -DFRINGE_FORCE_AU=ON \
+            -DFRINGE_COPY_PLUGIN_AFTER_BUILD=OFF
+
+      - name: Build
+        run: cmake --build build --config Release -j
+
+      - name: Package
+        env:
+          FRINGE_UNIVERSAL: "1"
+          SKIP_BUILD: "1"
+          FRINGE_BUILD_DIR: build
+        run: |
+          chmod +x scripts/package_release.sh scripts/sign_and_notarize_macos.sh
+          # Inject signing secrets if present
+          if [ -n "${{ secrets.APPLE_DEVELOPER_ID }}" ]; then
+            export APPLE_DEVELOPER_ID="${{ secrets.APPLE_DEVELOPER_ID }}"
+            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
+            if [ -n "${{ secrets.APPLE_API_KEY_BASE64 }}" ]; then
+              echo "${{ secrets.APPLE_API_KEY_BASE64 }}" | base64 --decode > /tmp/AuthKey.p8
+              export APPLE_API_KEY_PATH=/tmp/AuthKey.p8
+              export APPLE_API_KEY_ID="${{ secrets.APPLE_API_KEY_ID }}"
+              export APPLE_API_ISSUER="${{ secrets.APPLE_API_ISSUER }}"
+            fi
+          fi
+          ./scripts/package_release.sh
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fringe-macOS-universal
+          path: dist/*.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" dist/*.zip --clobber || \
+            gh release create "${{ github.ref_name }}" dist/*.zip \
+              --title "${{ github.ref_name }}" \
+              --generate-notes
+
+  # ---------------------------------------------------------------------------
+  # Windows — VST3 + Standalone + CLAP
+  # ---------------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DFRINGE_BUILD_CLAP=ON \
+            -DFRINGE_COPY_PLUGIN_AFTER_BUILD=OFF
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release -j
+
+      - name: Stage zip
+        shell: bash
+        run: |
+          VERSION=$(grep -E '^project\(Fringe VERSION' CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          ART=build/Fringe_artefacts/Release
+          STAGE=dist/stage-Fringe-${VERSION}-Windows-x64
+          mkdir -p "$STAGE/VST3" "$STAGE/Standalone" "$STAGE/CLAP"
+          # VST3
+          if [ -d "$ART/VST3/Fringe.vst3" ]; then
+            cp -a "$ART/VST3/Fringe.vst3" "$STAGE/VST3/"
+          fi
+          # Standalone exe
+          if [ -f "$ART/Standalone/Fringe.exe" ]; then
+            cp -a "$ART/Standalone/Fringe.exe" "$STAGE/Standalone/"
+          fi
+          # CLAP
+          find "$ART" -name 'Fringe.clap' -exec cp -a {} "$STAGE/CLAP/" \; || true
+          cp LICENSE CHANGELOG.md README.md INSTALL.md docs/KNOWN_ISSUES.md "$STAGE/" 2>/dev/null || true
+          mkdir -p dist
+          (cd dist && 7z a "Fringe-${VERSION}-Windows-x64.zip" "stage-Fringe-${VERSION}-Windows-x64")
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fringe-Windows-x64
+          path: dist/*.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "${{ github.ref_name }}" dist/*.zip --clobber || true
+
+  # ---------------------------------------------------------------------------
+  # Linux — VST3 + Standalone + CLAP
+  # ---------------------------------------------------------------------------
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libasound2-dev libfreetype6-dev libx11-dev libxcomposite-dev \
+            libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libxrender-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev mesa-common-dev \
+            libjack-jackd2-dev zip
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DFRINGE_BUILD_CLAP=ON \
+            -DFRINGE_COPY_PLUGIN_AFTER_BUILD=OFF
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Stage zip
+        run: |
+          VERSION=$(grep -E '^project\(Fringe VERSION' CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          ART=build/Fringe_artefacts
+          STAGE=dist/stage-Fringe-${VERSION}-Linux-x86_64
+          mkdir -p "$STAGE/VST3" "$STAGE/Standalone" "$STAGE/CLAP"
+          find "$ART" -type d -name 'Fringe.vst3' -exec cp -a {} "$STAGE/VST3/" \; || true
+          find "$ART" -type f -name 'Fringe' -path '*/Standalone/*' -exec cp -a {} "$STAGE/Standalone/" \; || true
+          find "$ART" \( -name 'Fringe.clap' -o -name 'Fringe.so' \) -exec cp -a {} "$STAGE/CLAP/" \; || true
+          cp LICENSE CHANGELOG.md README.md INSTALL.md docs/KNOWN_ISSUES.md "$STAGE/" 2>/dev/null || true
+          mkdir -p dist
+          (cd dist && zip -r "Fringe-${VERSION}-Linux-x86_64.zip" "stage-Fringe-${VERSION}-Linux-x86_64")
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fringe-Linux-x86_64
+          path: dist/*.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" dist/*.zip --clobber || true

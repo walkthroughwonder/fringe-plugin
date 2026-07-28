@@ -1,61 +1,81 @@
-# Install Fringe 1.0 (macOS)
+# Install Fringe 1.1
 
-## Requirements
-- macOS 11+ recommended  
-- **Intel Mac**, or Apple Silicon with **Rosetta** (this release is `x86_64`)  
-- A host that loads **VST3 instruments** (Renoise 3.4+, Ableton, Reaper, Bitwig, etc.)
+## macOS
 
-## Quick install (VST3)
+### From release zip
 
-1. Download `Fringe-1.0.0-macOS-Intel.zip` from [Releases](https://github.com/walkthroughwonder/fringe-plugin/releases).
+1. Download the **macOS-universal** zip (preferred) or **macOS-x86_64**.
 2. Unzip.
-3. Copy **`Fringe.vst3`** to:
-   ```
-   ~/Library/Audio/Plug-Ins/VST3/
-   ```
-   (Create the `VST3` folder if needed.)
+3. Run **`Install-Plugins.command`** (installs VST3, AU if present, CLAP if present),  
+   **or** copy manually:
+
+| Format | Copy to |
+|--------|---------|
+| `VST3/Fringe.vst3` | `~/Library/Audio/Plug-Ins/VST3/` |
+| `AU/Fringe.component` | `~/Library/Audio/Plug-Ins/Components/` |
+| `CLAP/Fringe.clap` | `~/Library/Audio/Plug-Ins/CLAP/` |
+| `Standalone/Fringe.app` | `/Applications` or anywhere |
+
 4. Rescan plugins in your DAW.
-5. Load **Edwin Rosero: Fringe** as an **instrument** (not an effect).
+5. Load **Edwin Rosero: Fringe** as an **instrument**.
 
-## Standalone
+### Gatekeeper
 
-Open **`Fringe.app`** from the zip.  
-If macOS blocks it: **System Settings → Privacy & Security → Open Anyway**.
-
-## Renoise
-
-1. **Preferences → Plug-ins** → enable VST3 → Rescan  
-2. Instrument slot → Plugin → **Edwin Rosero: Fringe**  
-3. Click the editor so it has keyboard focus  
-
-See also `docs/RENOISE.md`.
-
-## First sounds
-
-| Control | Action |
-|---------|--------|
-| **SOURCE** | Continuous field |
-| **Space** | Fire a wavefront |
-| **Z–P** | Pentatonic keys |
-| **Double Slit** preset | Classic interference |
-| Drag **SRC** / **DET** | Move source & detector |
-
-## Gatekeeper / “damaged” app
+If macOS blocks the plugin:
 
 ```bash
 xattr -cr ~/Library/Audio/Plug-Ins/VST3/Fringe.vst3
-xattr -cr /path/to/Fringe.app
+xattr -cr ~/Library/Audio/Plug-Ins/Components/Fringe.component
+xattr -cr ~/Library/Audio/Plug-Ins/CLAP/Fringe.clap
 ```
+
+Notarized builds (Developer ID) should open without this.
+
+### Apple Silicon
+
+- Use the **universal** zip, or  
+- Use Rosetta with the Intel zip, or  
+- Build from source on your machine.
+
+## Windows
+
+1. Unzip `Fringe-*-Windows-x64.zip`.
+2. Copy `VST3/Fringe.vst3` to:
+   - `C:\Program Files\Common Files\VST3\`  
+   or your host’s VST3 path.
+3. Copy `CLAP/Fringe.clap` to your CLAP path if the host supports CLAP  
+   (e.g. `%COMMONPROGRAMFILES%\CLAP\`).
+4. Run `Standalone/Fringe.exe` optionally.
+5. Rescan plugins.
+
+## Linux
+
+1. Unzip `Fringe-*-Linux-x86_64.zip`.
+2. Copy VST3 bundle to `~/.vst3/` (or `/usr/local/lib/vst3/`).
+3. Copy CLAP to `~/.clap/` (or system CLAP path).
+4. Ensure jack/ALSA deps for Standalone as needed.
+5. Rescan host plugins.
+
+## Renoise
+
+1. Preferences → Plug-ins → enable **VST3** (and CLAP if available) → Rescan  
+2. Instrument → Plugin → **Edwin Rosero: Fringe**  
+3. Focus the editor for Space / QWERTY  
+
+## First play
+
+| Input | Action |
+|-------|--------|
+| **SOURCE** | Continuous field |
+| **Space** | Wavefront pulse |
+| **Z–P** | Pentatonic keys |
+| Drag **SRC/DET** | Move probes |
+| **CINE/SCI** | View mode |
 
 ## Build from source
 
+See [README.md](README.md). Package with:
+
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j
-# VST3 installs to ~/Library/Audio/Plug-Ins/VST3/ when COPY_PLUGIN_AFTER_BUILD is on
+./scripts/package_release.sh
 ```
-
-## License
-
-GPL-3.0 — see `LICENSE`. Source: https://github.com/walkthroughwonder/fringe-plugin  
-Web original: https://edwinrosero.com/fringe/
