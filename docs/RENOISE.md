@@ -8,13 +8,15 @@ Fringe is a **VST3 instrument** (synth), not an effect.
 ~/Library/Audio/Plug-Ins/VST3/Fringe.vst3
 ```
 
-Rebuild + reinstall from the plugin repo:
+**From release zip:** double-click `Install-VST3.command`, or copy `VST3/Fringe.vst3` into the folder above.
+
+**From source:**
 
 ```bash
 export PATH="$HOME/.local/cmake/bin:$PATH"
 cd ~/Documents/fringe-plugin
-cmake --build build --config Release -j
-# JUCE COPY_PLUGIN_AFTER_BUILD installs to the path above
+./scripts/package_release.sh
+# installs VST3 locally and builds dist/Fringe-*-macOS-*.zip
 ```
 
 ## In Renoise

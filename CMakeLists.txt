@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Fringe VERSION 0.2.0 LANGUAGES C CXX)
+project(Fringe VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,6 +28,9 @@ if(APPLE)
   )
   if(_xcode_ok EQUAL 0)
     list(APPEND FRINGE_FORMATS AU)
+    message(STATUS "Full Xcode found — building AU + VST3 + Standalone")
+  else()
+    message(STATUS "Command Line Tools only — building VST3 + Standalone (no AU)")
   endif()
 endif()
 
@@ -47,6 +50,7 @@ juce_add_plugin(Fringe
   FORMATS ${FRINGE_FORMATS}
   PRODUCT_NAME "Fringe"
   DESCRIPTION "Photonic synthesizer — play light as sound"
+  VERSION ${PROJECT_VERSION}
   VST3_CATEGORIES Instrument Synth
   AU_MAIN_TYPE kAudioUnitType_MusicDevice
 )
@@ -82,6 +86,7 @@ target_compile_definitions(Fringe
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_REPORT_APP_USAGE=0
+    FRINGE_VERSION="${PROJECT_VERSION}"
 )
 
 target_link_libraries(Fringe

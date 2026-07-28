@@ -1,29 +1,65 @@
-# Fringe
+# Fringe 1.0
 
-**Photonic synthesizer** — wave-optics as a VST3/Standalone instrument (port of [web Fringe](https://edwinrosero.com/fringe/)).
+**Photonic synthesizer** — wave optics as a playable instrument.
 
-## Features (v0.3)
+Port of the browser instrument: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
 
-- Live **FDTD wave field** with cathedral colour grading + soft bloom
-- Presets: **Single/Double Slit, Lens, Diffraction, Mach–Zehnder, Draw, Open Field**
-- **Draw mode** — paint walls on the field (Width = brush; ERASE; CLEAR; double-click clear)
-- 3-detector stereo sonification + FDN reverb + scale/drone
-- **LFO 1–3** rate/depth (targets: freq/speed/slit/sens/filter/reverb via APVTS)
-- Detector graph sidebar
-- MIDI (pulse/hold) · QWERTY pentatonic · Space = source gate
+![Fringe](https://img.shields.io/badge/version-1.0.0-c9a84c) ![platform](https://img.shields.io/badge/macOS-Intel%20VST3-blue) ![license](https://img.shields.io/badge/license-GPL--3.0-green)
 
-## Run
+## Download
 
-```bash
-open build/Fringe_artefacts/Release/Standalone/Fringe.app
-# VST3 also installed to ~/Library/Audio/Plug-Ins/VST3/Fringe.vst3
-```
+**[Releases → Fringe 1.0.0](https://github.com/walkthroughwonder/fringe-plugin/releases)**  
+See [INSTALL.md](INSTALL.md) for DAW setup (Renoise, etc.).
+
+## What it is
+
+A **VST3 / Standalone** instrument that runs a real-time **FDTD wave field**, sonifies three detector columns, and treats optics (slits, lenses, draw-your-own walls) as the synthesis engine.
+
+### Highlights
+- Live supersampled wave display (CINE / SCI views)
+- Drag **source** and **detector** on the field
+- Presets: Single/Double Slit, Lens, Diffraction, Mach–Zehnder, Draw, Open Field
+- Scale / drone modes, FDN reverb, 3 LFOs
+- **Space** = wavefront pulse · QWERTY + MIDI
+
+## Formats (1.0.0)
+
+| Format | Status |
+|--------|--------|
+| macOS VST3 (Intel) | ✅ Release zip |
+| macOS Standalone (Intel) | ✅ Release zip |
+| macOS AU | Build with full Xcode |
+| Apple Silicon native | Build from source / upcoming CI |
+| Windows / Linux / CLAP | Post-1.0 |
 
 ## Build
 
 ```bash
-export PATH="$HOME/.local/cmake/bin:$PATH"
-cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
 ```
 
-GPL-3.0 · see `docs/PRODUCT_DECISIONS.md`
+Package a release zip:
+
+```bash
+./scripts/package_release.sh
+# → dist/Fringe-1.0.0-macOS-Intel.zip
+```
+
+## Docs
+
+- [INSTALL.md](INSTALL.md) — install & first play  
+- [CHANGELOG.md](CHANGELOG.md) — 1.0 notes  
+- [docs/PRODUCT_DECISIONS.md](docs/PRODUCT_DECISIONS.md) — design locks  
+- [docs/RENOISE.md](docs/RENOISE.md) — Renoise tips  
+- [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — limitations  
+
+## License
+
+**GPL-3.0** (open source). Uses the JUCE framework under GPL.  
+Commercial closed-source distribution requires a commercial JUCE license.
+
+## Credits
+
+**Edwin Rosero** — concept, web Fringe, plugin  
+Manufacturer code `EdRo` · plugin code `Frng`
