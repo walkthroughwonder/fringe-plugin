@@ -14,39 +14,39 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "volume", 1 }, "Volume",
-        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.4f));
+        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.48f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "speed", 1 }, "Speed",
-        juce::NormalisableRange<float> { 0.2f, 2.0f, 0.01f }, 0.9f));
+        juce::NormalisableRange<float> { 0.2f, 2.0f, 0.01f }, 0.72f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "freq", 1 }, "Freq",
-        juce::NormalisableRange<float> { 15.0f, 100.0f, 0.1f }, 60.0f));
+        juce::NormalisableRange<float> { 15.0f, 100.0f, 0.1f }, 28.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "slit", 1 }, "Slit/Gap",
-        juce::NormalisableRange<float> { 0.008f, 0.15f, 0.001f }, 0.03f));
+        juce::NormalisableRange<float> { 0.008f, 0.15f, 0.001f }, 0.035f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "slitW", 1 }, "Width/Brush",
-        juce::NormalisableRange<float> { 0.004f, 0.06f, 0.001f }, 0.012f));
+        juce::NormalisableRange<float> { 0.004f, 0.06f, 0.001f }, 0.014f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "sens", 1 }, "Sensitivity",
-        juce::NormalisableRange<float> { 0.1f, 5.0f, 0.01f }, 2.0f));
+        juce::NormalisableRange<float> { 0.1f, 5.0f, 0.01f }, 1.15f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "filter", 1 }, "Filter",
-        juce::NormalisableRange<float> { 200.0f, 12000.0f, 1.0f, 0.3f }, 7000.0f));
+        juce::NormalisableRange<float> { 200.0f, 12000.0f, 1.0f, 0.3f }, 1100.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "reverb", 1 }, "Reverb",
-        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.45f));
+        juce::NormalisableRange<float> { 0.0f, 1.0f, 0.01f }, 0.58f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "release", 1 }, "Release",
-        juce::NormalisableRange<float> { 0.05f, 3.0f, 0.01f }, 0.5f));
+        juce::NormalisableRange<float> { 0.05f, 3.0f, 0.01f }, 0.7f));
 
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID { "preset", 1 }, "Preset",
@@ -60,7 +60,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FringeAudioProcessor::create
         0));
 
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID { "scaleMode", 1 }, "Scale", false));
+        juce::ParameterID { "scaleMode", 1 }, "Scale", true));
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { "droneMode", 1 }, "Drone", false));
     params.push_back (std::make_unique<juce::AudioParameterBool> (
@@ -108,15 +108,15 @@ void FringeAudioProcessor::pushParamsToEngine()
         return def;
     };
 
-    p.volume = load ("volume", 0.4f);
-    p.speed = load ("speed", 0.9f);
-    p.freq = load ("freq", 60.0f);
-    p.slit = load ("slit", 0.03f);
-    p.slitW = load ("slitW", 0.012f);
-    p.sensitivity = load ("sens", 2.0f);
-    p.filterHz = load ("filter", 7000.0f);
-    p.reverb = load ("reverb", 0.45f);
-    p.release = load ("release", 0.5f);
+    p.volume = load ("volume", 0.48f);
+    p.speed = load ("speed", 0.72f);
+    p.freq = load ("freq", 28.0f);
+    p.slit = load ("slit", 0.035f);
+    p.slitW = load ("slitW", 0.014f);
+    p.sensitivity = load ("sens", 1.15f);
+    p.filterHz = load ("filter", 1100.0f);
+    p.reverb = load ("reverb", 0.58f);
+    p.release = load ("release", 0.7f);
     p.preset = static_cast<int> (load ("preset", 0.0f));
     p.midiMode = static_cast<int> (load ("midiMode", 0.0f));
     p.scaleMode = load ("scaleMode", 0.0f) > 0.5f;

@@ -156,7 +156,7 @@ void FringeEngine::applyGateAndEnvelope()
     {
         sourceOn_ = true;
         if (params_.gate && pulseSamplesLeft_ <= 0 && activeNote_ < 0)
-            sourceAmp_ = 0.025f;
+            sourceAmp_ = 0.032f; // slightly fuller continuous body
         envelope_ += (1.0f - envelope_) * 0.1f;
     }
     else

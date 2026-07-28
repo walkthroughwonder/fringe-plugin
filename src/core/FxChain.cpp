@@ -108,22 +108,27 @@ void FxChain::process (float l, float c, float r, float energy, float& outL, flo
     left *= gain;
     right *= gain;
 
-    // Energy → resonant freq (web: 60 + energy*2000, clamp 40–3500)
-    float targetFreq = 60.0f + energy * 2000.0f;
-    targetFreq = std::clamp (targetFreq, 40.0f, 3500.0f);
+    // Energy → resonant freq: stay in bass/mid musical band (was 40–3500, way too bright)
+    // ~55–380 Hz before quantize → pentatonic lands in warm mid-bass
+    float targetFreq = 55.0f + energy * 260.0f;
+    targetFreq = std::clamp (targetFreq, 48.0f, 380.0f);
     if (scaleMode_)
         targetFreq = quantizePentatonic (targetFreq);
-    smoothTargetFreq_ += (targetFreq - smoothTargetFreq_) * 0.08f;
+    // keep quantized tone in musical low-mid even if scale snaps high
+    targetFreq = std::clamp (targetFreq, 48.0f, 420.0f);
+    smoothTargetFreq_ += (targetFreq - smoothTargetFreq_) * 0.06f;
 
-    peakF_.setPeaking (static_cast<float> (sr_), smoothTargetFreq_, scaleMode_ ? 3.0f : 1.2f,
-                       scaleMode_ ? 8.0f : 3.0f);
+    peakF_.setPeaking (static_cast<float> (sr_), smoothTargetFreq_, scaleMode_ ? 4.5f : 2.2f,
+                       scaleMode_ ? 9.0f : 5.0f);
     float mid = 0.5f * (left + right);
     float peaked = peakF_.process (mid);
 
     if (scaleMode_ && ! droneMode_)
     {
-        peakFifth_.setPeaking (static_cast<float> (sr_), std::min (3500.0f, smoothTargetFreq_ * 1.5f), 2.0f, 4.0f);
-        peaked += peakFifth_.process (mid) * 0.5f;
+        // soft fifth, still capped in mid range
+        const float fifth = std::min (520.0f, smoothTargetFreq_ * 1.5f);
+        peakFifth_.setPeaking (static_cast<float> (sr_), fifth, 2.5f, 3.0f);
+        peaked += peakFifth_.process (mid) * 0.35f;
     }
 
     if (droneMode_)
@@ -131,10 +136,11 @@ void FxChain::process (float l, float c, float r, float energy, float& outL, flo
         for (int i = 0; i < 3; ++i)
         {
             const float h = static_cast<float> (i + 2);
-            const float g = std::min (8.0f, energy * (40.0f + 20.0f * static_cast<float> (i)));
+            const float g = std::min (6.0f, energy * (28.0f + 14.0f * static_cast<float> (i)));
+            const float f = std::min (600.0f, smoothTargetFreq_ * h);
             dronePeaks_[static_cast<size_t> (i)].setPeaking (
-                static_cast<float> (sr_), std::min (3500.0f, smoothTargetFreq_ * h), 4.0f, g);
-            peaked += dronePeaks_[static_cast<size_t> (i)].process (mid) * 0.35f;
+                static_cast<float> (sr_), f, 3.5f, g);
+            peaked += dronePeaks_[static_cast<size_t> (i)].process (mid) * 0.28f;
         }
     }
 
@@ -154,12 +160,12 @@ void FxChain::process (float l, float c, float r, float energy, float& outL, flo
     mixed = lpf_.process (mixed);
     mixed = hpf_.process (mixed);
 
-    // Sub osc bypasses LPF path → add after HPF on dry mix path conceptually after
-    const float subFreq = std::max (20.0f, smoothTargetFreq_ * 0.5f);
+    // Sub osc (more presence for bass body)
+    const float subFreq = std::max (28.0f, smoothTargetFreq_ * 0.5f);
     subPhase_ += subFreq / static_cast<float> (sr_);
     if (subPhase_ >= 1.0f)
         subPhase_ -= 1.0f;
-    const float subLevel = std::min (0.15f, energy * 1.5f);
+    const float subLevel = std::min (0.28f, 0.06f + energy * 2.0f);
     const float sub = std::sin (subPhase_ * 6.2831853f) * subLevel;
 
     const float out = (mixed + sub) * volume_;

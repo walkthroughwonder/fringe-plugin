@@ -64,19 +64,20 @@ float DetectorVoice::processSample()
         sample = sample * crossfade_ + fVal * (1.0f - crossfade_);
     }
 
-    // ScriptProcessor path: tanh * 1.8
-    sample = std::tanh (sample * 1.8f) * envGain;
-    sample = prevSample_ * 0.1f + sample * 0.9f;
+    // Softer saturation + slower column scan → mid/bass body (was tanh*1.8 @ rate 1.0)
+    sample = std::tanh (sample * 1.15f) * envGain;
+    sample = prevSample_ * 0.18f + sample * 0.82f; // slightly darker DC blend
     prevSample_ = sample;
 
-    readPos_ += 1.0; // playbackRate 1.0
+    constexpr double kPlaybackRate = 0.42; // lower = deeper / more musical
+    readPos_ += kPlaybackRate;
     if (readPos_ >= static_cast<double> (len) * 1000.0)
         readPos_ -= static_cast<double> (len) * 1000.0;
 
     if (crossfade_ < 1.0f)
-        crossfade_ = std::min (1.0f, crossfade_ + static_cast<float> (1.0 / sampleRate_ * 8.0));
+        crossfade_ = std::min (1.0f, crossfade_ + static_cast<float> (1.0 / sampleRate_ * 6.0));
 
-    return sample * 0.35f;
+    return sample * 0.30f;
 }
 
 } // namespace fringe

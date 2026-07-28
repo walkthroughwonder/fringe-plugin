@@ -157,7 +157,7 @@ void FdtdSimulator::readDetectorColumn (float uvX, float* outInstant, int outH) 
                                   0, h_ - 1);
         const float a = curr_[static_cast<size_t> (idx (x, y))];
         // Instant intensity-like signal (signed amp for richer spectrum)
-        outInstant[oy] = a * sensitivity_ * speedMult_ * 8.0f;
+        outInstant[oy] = a * sensitivity_ * speedMult_ * 3.2f; // was *8 — less brittle highs
     }
 }
 

@@ -50,9 +50,9 @@ private:
     };
 
     double sr_ = 44100.0;
-    float filterHz_ = 7000.0f;
-    float reverb_ = 0.4f;
-    float volume_ = 0.3f;
+    float filterHz_ = 1100.0f;
+    float reverb_ = 0.58f;
+    float volume_ = 0.48f;
     bool scaleMode_ = false;
     bool droneMode_ = false;
 

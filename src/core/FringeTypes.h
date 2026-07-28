@@ -27,7 +27,7 @@ inline constexpr float kDetR = 0.96f;
 
 inline constexpr std::array<float, 4> kFdnTimes { 1.37f, 1.71f, 2.23f, 3.19f };
 inline constexpr float kFdnFeedback = 0.55f;
-inline constexpr float kFdnDarkenHz = 2800.0f;
+inline constexpr float kFdnDarkenHz = 1600.0f; // darker cathedral tail
 
 enum class Preset : int
 {
@@ -67,19 +67,20 @@ struct LfoState
 
 struct EngineParams
 {
-    float volume = 0.35f;
-    float speed = 0.9f;
-    float freq = 60.0f;
-    float sensitivity = 1.8f;
-    float filterHz = 7000.0f;
-    float reverb = 0.4f;
-    float release = 0.5f;
-    float slit = 0.03f;
-    float slitW = 0.012f;
-    bool scaleMode = false;
+    // Warm / mid-bass factory character (musical, not screechy)
+    float volume = 0.48f;
+    float speed = 0.72f;
+    float freq = 28.0f;           // slower source → denser, lower energy field
+    float sensitivity = 1.15f;
+    float filterHz = 1100.0f;     // low-pass ceiling in the musical mid/bass band
+    float reverb = 0.58f;
+    float release = 0.7f;
+    float slit = 0.035f;
+    float slitW = 0.014f;
+    bool scaleMode = true;        // pentatonic resonance by default
     bool droneMode = false;
     bool gate = true;
-    int preset = 0;
+    int preset = 0;               // Single Slit
     int midiMode = 0;
     std::array<LfoState, 3> lfos {};
 };
@@ -112,19 +113,20 @@ inline float midiVelocityToAmp (float vel01)
 
 inline float quantizePentatonic (float freq)
 {
-    static constexpr int semis[] = { 0, 2, 4, 7, 9 };
-    const float A4 = 440.0f;
-    const float semiFromA4 = 12.0f * std::log2 (std::max (freq, 1.0f) / A4);
-    const float noteInOctave = std::fmod (semiFromA4 + 1200.0f, 12.0f);
-    float best = 0, bestD = 1e9f;
-    for (int s : semis)
+    // Snap into C minor-pent-ish degrees, then fold into bass/mid (C2–C4-ish)
+    static constexpr float kDegrees[] = {
+        65.41f, 73.42f, 82.41f, 98.00f, 110.00f,   // C2 D2 E2 G2 A2
+        130.81f, 146.83f, 164.81f, 196.00f, 220.00f, // C3…
+        261.63f, 293.66f, 329.63f, 392.00f, 440.00f  // C4… (cap)
+    };
+    float best = kDegrees[0];
+    float bestD = 1e9f;
+    for (float d : kDegrees)
     {
-        const float d = std::abs (noteInOctave - static_cast<float> (s));
-        if (d < bestD) { bestD = d; best = static_cast<float> (s); }
+        const float err = std::abs (std::log2 (std::max (freq, 1.0f) / d));
+        if (err < bestD) { bestD = err; best = d; }
     }
-    const float octave = std::floor ((semiFromA4 + 3.0f) / 12.0f);
-    const float n = octave * 12.0f + best - 3.0f;
-    return A4 * std::pow (2.0f, n / 12.0f);
+    return best;
 }
 
 } // namespace fringe
