@@ -9,6 +9,9 @@
   --gold: #c9a84c;
   --gold-dim: rgba(201, 168, 76, 0.35);
   --cyan: #5ec8e8;
+  --blue: #3d8bfd;
+  --blue-dim: rgba(61, 139, 253, 0.4);
+  --blue-soft: rgba(61, 139, 253, 0.18);
   --line: rgba(255, 255, 255, 0.08);
   --serif: "Cormorant Garamond", Georgia, serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -84,24 +87,24 @@ a:hover { color: #e8c96a; }
 }
 .nav-links a:hover { color: var(--bone); }
 
-/* Buttons */
+/* Buttons — primary Get/Download CTAs use blue */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 12px 22px;
-  border: 1px solid var(--gold-dim);
-  background: linear-gradient(180deg, rgba(201,168,76,0.18), rgba(201,168,76,0.06));
-  color: var(--bone);
+  border: 1px solid var(--blue-dim);
+  background: linear-gradient(180deg, rgba(61,139,253,0.28), rgba(61,139,253,0.1));
+  color: #e8f1ff;
   font-family: var(--mono);
   font-size: 0.75rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
 .btn:hover {
-  border-color: var(--gold);
-  background: linear-gradient(180deg, rgba(201,168,76,0.28), rgba(201,168,76,0.1));
+  border-color: var(--blue);
+  background: linear-gradient(180deg, rgba(61,139,253,0.42), rgba(61,139,253,0.16));
   color: #fff;
 }
 .btn-sm { padding: 8px 14px; font-size: 0.68rem; }
@@ -311,20 +314,20 @@ a:hover { color: #e8c96a; }
   transition: border-color 0.2s, transform 0.2s;
 }
 .dl-card:hover {
-  border-color: var(--gold-dim);
+  border-color: var(--blue-dim);
   transform: translateY(-2px);
   color: var(--bone);
 }
 .dl-card.featured {
-  border-color: var(--gold-dim);
-  background: linear-gradient(160deg, rgba(201,168,76,0.12), var(--panel) 50%);
+  border-color: var(--blue-dim);
+  background: linear-gradient(160deg, rgba(61,139,253,0.14), var(--panel) 50%);
   grid-column: 1 / -1;
 }
 .dl-os {
   font-size: 0.65rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--blue);
 }
 .dl-card strong {
   font-family: var(--serif);
@@ -337,7 +340,7 @@ a:hover { color: #e8c96a; }
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--blue);
 }
 .dl-note {
   margin-top: 20px;
