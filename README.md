@@ -8,8 +8,8 @@ Port of: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
 
 ## Website
 
-Product site (local): open [`website/index.html`](website/index.html)  
-GitHub Pages (once enabled): `https://walkthroughwonder.github.io/fringe-plugin/`
+**https://edwinrosero.com/fringe-plugin/**  
+Local: [`website/index.html`](website/index.html) · mirror: https://walkthroughwonder.github.io/fringe-plugin/
 
 ## Download
 
