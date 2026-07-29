@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fringe — Photonic Synthesizer Plugin</title>
+<meta name="description" content="Fringe is a photonic synthesizer: real-time wave optics as a VST3 / AU / CLAP instrument. Drag the field. Fire wavefronts. Play light as sound.">
+<meta name="theme-color" content="#06060a">
+<meta property="og:title" content="Fringe — Photonic Synthesizer">
+<meta property="og:description" content="Wave optics as a playable instrument. VST3, AU, CLAP — macOS, Windows, Linux.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/hero-wave-web.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,400&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="noise" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="nav-brand" href="#top">FRINGE <span>1.1</span></a>
+  <nav class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#gallery">Gallery</a>
+    <a href="#download">Download</a>
+    <a href="#install">Install</a>
+    <a href="#play">Play</a>
+  </nav>
+  <a class="btn btn-sm" href="https://github.com/walkthroughwonder/fringe-plugin/releases/tag/v1.1.0">Get 1.1.0</a>
+</header>
+
+<main id="top">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg" style="background-image:url('assets/hero-wave-web.jpg')"></div>
+    <div class="hero-vignette"></div>
+    <div class="hero-inner">
+      <p class="eyebrow">Photonic synthesizer · v1.1</p>
+      <h1>Play light<br><em>as sound</em></h1>
+      <p class="lede">
+        Fringe turns a real-time wave-optics field into a musical instrument.
+        Diffraction, interference, and freehand barriers become timbre —
+        detectors become voices.
+      </p>
+      <div class="hero-cta">
+        <a class="btn" href="https://github.com/walkthroughwonder/fringe-plugin/releases/tag/v1.1.0">Download Fringe 1.1</a>
+        <a class="btn btn-ghost" href="https://edwinrosero.com/fringe/">Web Fringe</a>
+        <a class="btn btn-ghost" href="https://github.com/walkthroughwonder/fringe-plugin">Source</a>
+      </div>
+      <ul class="pill-row">
+        <li>VST3</li>
+        <li>AU</li>
+        <li>CLAP</li>
+        <li>Standalone</li>
+        <li>macOS universal</li>
+        <li>Windows</li>
+        <li>Linux</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- GALLERY / PROOF -->
+  <section id="gallery" class="section">
+    <div class="section-head">
+      <p class="eyebrow">Interface</p>
+      <h2>Cinematic 20:9 editor</h2>
+      <p class="section-sub">Live supersampled wave field, detector scope, drag handles, mid/bass factory tone.</p>
+    </div>
+    <figure class="shot shot-main">
+      <img src="assets/screenshot-editor-lg.png" alt="Fringe plugin editor showing wave field, detector panel, and knobs" width="1600" height="720" loading="lazy">
+      <figcaption>Editor — Draw mode · SOURCE · SCALE · detector energy · LFO rail</figcaption>
+    </figure>
+    <div class="shot-grid">
+      <figure class="shot">
+        <img src="assets/hero-wave-web.jpg" alt="Abstract wave interference field" loading="lazy">
+        <figcaption>Wave field aesthetic — cyan source to rose detector</figcaption>
+      </figure>
+      <figure class="shot shot-copy">
+        <div class="copy-card">
+          <h3>From browser to DAW</h3>
+          <p>Born as a web instrument at <a href="https://edwinrosero.com/fringe/">edwinrosero.com/fringe</a>, Fringe now runs natively in Renoise, Reaper, Ableton, Bitwig, and more — as VST3, AU, or CLAP.</p>
+          <ul>
+            <li>Drag <strong>SRC</strong> and <strong>DET</strong> on the field</li>
+            <li><strong>Space</strong> fires a wavefront pulse</li>
+            <li>CINE / SCI view modes</li>
+            <li>Paint walls in Draw preset</li>
+          </ul>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="section section-alt">
+    <div class="section-head">
+      <p class="eyebrow">Engine</p>
+      <h2>Optics as synthesis</h2>
+    </div>
+    <div class="feature-grid">
+      <article class="feature">
+        <h3>FDTD wave field</h3>
+        <p>Real-time finite-difference wave simulation. Slits, lenses, Mach–Zehnder, freehand barriers — geometry shapes the sound.</p>
+      </article>
+      <article class="feature">
+        <h3>Detector sonification</h3>
+        <p>Three vertical probes (L/C/R) scan the field into stereo voices with saturation, resonant peaks, FDN reverb, and sub.</p>
+      </article>
+      <article class="feature">
+        <h3>Musical defaults</h3>
+        <p>Factory mid/bass tuning, pentatonic scale mode, warm filter ceiling — less screech, more body.</p>
+      </article>
+      <article class="feature">
+        <h3>Interactive stage</h3>
+        <p>20:9 cinematic UI. Supersampled field graphics. Drag probes. CINE age palette or SCI lab map.</p>
+      </article>
+      <article class="feature">
+        <h3>Performance input</h3>
+        <p>MIDI pulse/hold, mod wheel → freq, CC74 → filter, QWERTY pentatonic, spacebar wavefronts.</p>
+      </article>
+      <article class="feature">
+        <h3>Modulation</h3>
+        <p>Three LFOs with depth/rate and host-automatable targets for freq, speed, slit, sens, filter, reverb.</p>
+      </article>
+    </div>
+
+    <div class="presets">
+      <h3>Optical presets</h3>
+      <ul class="pill-row">
+        <li>Single Slit</li>
+        <li>Double Slit</li>
+        <li>Convex Lens</li>
+        <li>Diffraction</li>
+        <li>Mach–Zehnder</li>
+        <li>Draw</li>
+        <li>Open Field</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section id="download" class="section">
+    <div class="section-head">
+      <p class="eyebrow">v1.1.0</p>
+      <h2>Download</h2>
+      <p class="section-sub">Free · open source (GPL-3.0) · GitHub Releases</p>
+    </div>
+    <div class="dl-grid">
+      <a class="dl-card featured" href="https://github.com/walkthroughwonder/fringe-plugin/releases/download/v1.1.0/Fringe-1.1.0-macOS-universal.zip">
+        <span class="dl-os">macOS</span>
+        <strong>Universal</strong>
+        <span class="dl-meta">arm64 + Intel · VST3 · AU · CLAP · Standalone</span>
+        <span class="dl-action">Download zip →</span>
+      </a>
+      <a class="dl-card" href="https://github.com/walkthroughwonder/fringe-plugin/releases/download/v1.1.0/Fringe-1.1.0-macOS-x86_64.zip">
+        <span class="dl-os">macOS</span>
+        <strong>Intel only</strong>
+        <span class="dl-meta">x86_64 · VST3 · CLAP · Standalone</span>
+        <span class="dl-action">Download →</span>
+      </a>
+      <a class="dl-card" href="https://github.com/walkthroughwonder/fringe-plugin/releases/download/v1.1.0/Fringe-1.1.0-Windows-x64.zip">
+        <span class="dl-os">Windows</span>
+        <strong>x64</strong>
+        <span class="dl-meta">VST3 · CLAP · Standalone</span>
+        <span class="dl-action">Download →</span>
+      </a>
+      <a class="dl-card" href="https://github.com/walkthroughwonder/fringe-plugin/releases/download/v1.1.0/Fringe-1.1.0-Linux-x86_64.zip">
+        <span class="dl-os">Linux</span>
+        <strong>x86_64</strong>
+        <span class="dl-meta">VST3 · CLAP · Standalone</span>
+        <span class="dl-action">Download →</span>
+      </a>
+    </div>
+    <p class="dl-note">
+      All releases:
+      <a href="https://github.com/walkthroughwonder/fringe-plugin/releases/tag/v1.1.0">github.com/walkthroughwonder/fringe-plugin/releases</a>
+    </p>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install" class="section section-alt">
+    <div class="section-head">
+      <p class="eyebrow">Setup</p>
+      <h2>Install</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="step-n">01</span>
+        <h3>macOS</h3>
+        <p>Unzip, run <code>Install-Plugins.command</code>, or copy:</p>
+        <ul>
+          <li><code>VST3 → ~/Library/Audio/Plug-Ins/VST3/</code></li>
+          <li><code>AU → ~/Library/Audio/Plug-Ins/Components/</code></li>
+          <li><code>CLAP → ~/Library/Audio/Plug-Ins/CLAP/</code></li>
+        </ul>
+        <p class="hint">If Gatekeeper blocks: System Settings → Privacy &amp; Security → Open Anyway, or <code>xattr -cr</code> the bundle.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">02</span>
+        <h3>Windows</h3>
+        <p>Copy <code>Fringe.vst3</code> to <code>C:\Program Files\Common Files\VST3\</code>. Place CLAP in your host’s CLAP path. Rescan plugins.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">03</span>
+        <h3>Linux</h3>
+        <p>Copy VST3 to <code>~/.vst3/</code>, CLAP to <code>~/.clap/</code>. Rescan your host.</p>
+      </div>
+      <div class="step">
+        <span class="step-n">04</span>
+        <h3>Renoise</h3>
+        <p>Preferences → Plug-ins → enable VST3 → Rescan. Instrument slot → Plugin → <strong>Edwin Rosero: Fringe</strong>. Click the editor for keyboard focus.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAY -->
+  <section id="play" class="section">
+    <div class="section-head">
+      <p class="eyebrow">Quickstart</p>
+      <h2>Make a sound</h2>
+    </div>
+    <div class="play-table-wrap">
+      <table class="play-table">
+        <thead>
+          <tr><th>Input</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><kbd>SOURCE</kbd></td><td>Continuous field on/off</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Fire a wavefront pulse</td></tr>
+          <tr><td><kbd>Z–P</kbd></td><td>QWERTY pentatonic rows</td></tr>
+          <tr><td>MIDI notes</td><td>Pulse (default) or hold mode</td></tr>
+          <tr><td>Drag SRC / DET</td><td>Move source plane &amp; detector</td></tr>
+          <tr><td>Double Slit</td><td>Classic interference preset</td></tr>
+          <tr><td>CINE / SCI</td><td>Cinematic vs scientific field view</td></tr>
+          <tr><td>Draw + paint</td><td>Freehand walls (Width = brush)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TECH / LICENSE -->
+  <section class="section section-alt">
+    <div class="two-col">
+      <div>
+        <p class="eyebrow">Open source</p>
+        <h2>Build &amp; license</h2>
+        <p>Source is on GitHub under <strong>GPL-3.0</strong> (JUCE under GPL). Commercial closed-source shipping needs a commercial JUCE license.</p>
+        <pre class="code"><code>cmake -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+  -DFRINGE_BUILD_CLAP=ON
+cmake --build build --config Release -j
+./scripts/package_release.sh</code></pre>
+        <p><a href="https://github.com/walkthroughwonder/fringe-plugin">github.com/walkthroughwonder/fringe-plugin</a></p>
+      </div>
+      <div>
+        <p class="eyebrow">Notes</p>
+        <h2>Known limits</h2>
+        <ul class="notes-list">
+          <li>macOS builds may be ad-hoc signed until Developer ID secrets are configured (Gatekeeper: Open Anyway).</li>
+          <li>Load as an <strong>instrument</strong>, not an insert effect.</li>
+          <li>FDTD is heavier than a basic synth — raise buffer size if needed.</li>
+          <li>Full notes: <a href="https://github.com/walkthroughwonder/fringe-plugin/blob/main/docs/KNOWN_ISSUES.md">KNOWN_ISSUES.md</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div>
+      <strong>FRINGE</strong>
+      <span>Photonic synthesizer by Edwin Rosero</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://edwinrosero.com/">edwinrosero.com</a>
+      <a href="https://edwinrosero.com/fringe/">Web Fringe</a>
+      <a href="https://github.com/walkthroughwonder/fringe-plugin">GitHub</a>
+      <a href="https://github.com/walkthroughwonder/fringe-plugin/releases">Releases</a>
+    </div>
+    <p class="footer-copy">© 2026 Edwin Rosero · GPL-3.0 · Manufacturer EdRo · Plugin Frng</p>
+  </div>
+</footer>
+</body>
+</html>

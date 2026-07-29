@@ -6,6 +6,11 @@ Port of: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
 
 ![version](https://img.shields.io/badge/version-1.1.0-c9a84c) ![license](https://img.shields.io/badge/license-GPL--3.0-green)
 
+## Website
+
+Product site (local): open [`website/index.html`](website/index.html)  
+GitHub Pages (once enabled): `https://walkthroughwonder.github.io/fringe-plugin/`
+
 ## Download
 
 **[GitHub Releases](https://github.com/walkthroughwonder/fringe-plugin/releases)**
