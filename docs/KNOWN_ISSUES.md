@@ -28,6 +28,9 @@
 - Universal builds are larger and slightly slower to compile.
 
 ## Roadmap
-- Default notarized universal release once Apple credentials are configured in CI  
-- Additional host validation (Logic, Ableton, Bitwig, Reaper matrix)  
+- **Notarized** universal release once Apple secrets are set (see `SIGNING_AND_NOTARIZATION.md`)  
+  Required secrets: `APPLE_DEVELOPER_ID`, `APPLE_TEAM_ID`, `APPLE_CERTIFICATE_BASE64`,  
+  `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_API_KEY_BASE64`  
+- Host smoke matrix: `docs/HOST_SMOKE.md`  
 - Optional quality tiers / scene pads  
+- Short public demo clip on product site

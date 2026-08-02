@@ -46,7 +46,7 @@
       </p>
       <div class="hero-cta">
         <a class="btn" href="https://github.com/walkthroughwonder/fringe-plugin/releases/tag/v1.1.0">Download Fringe 1.1</a>
-        <a class="btn btn-ghost" href="https://edwinrosero.com/fringe/">Web Fringe</a>
+        <a class="btn btn-ghost" href="https://edwinrosero.com/fringe/?play=1">Try in browser first</a>
         <a class="btn btn-ghost" href="https://github.com/walkthroughwonder/fringe-plugin">Source</a>
       </div>
       <ul class="pill-row">
@@ -175,6 +175,7 @@
     <p class="dl-note">
       All releases:
       <a href="https://github.com/walkthroughwonder/fringe-plugin/releases/tag/v1.1.0">github.com/walkthroughwonder/fringe-plugin/releases</a>
+      · Prefer <a href="https://edwinrosero.com/fringe/?play=1">browser demo</a> before installing
     </p>
   </section>
 
@@ -183,6 +184,7 @@
     <div class="section-head">
       <p class="eyebrow">Setup</p>
       <h2>Install</h2>
+      <p class="section-sub">Always load Fringe as an <strong>instrument</strong>, not an effect.</p>
     </div>
     <div class="steps">
       <div class="step">
@@ -194,22 +196,22 @@
           <li><code>AU → ~/Library/Audio/Plug-Ins/Components/</code></li>
           <li><code>CLAP → ~/Library/Audio/Plug-Ins/CLAP/</code></li>
         </ul>
-        <p class="hint">If Gatekeeper blocks: System Settings → Privacy &amp; Security → Open Anyway, or <code>xattr -cr</code> the bundle.</p>
+        <p class="hint">Gatekeeper: Privacy &amp; Security → Open Anyway, or <code>xattr -cr</code> the bundle. Notarized zips include <code>NOTARIZED.txt</code> and skip this step.</p>
       </div>
       <div class="step">
         <span class="step-n">02</span>
         <h3>Windows</h3>
-        <p>Copy <code>Fringe.vst3</code> to <code>C:\Program Files\Common Files\VST3\</code>. Place CLAP in your host’s CLAP path. Rescan plugins.</p>
+        <p>Copy <code>Fringe.vst3</code> to <code>C:\Program Files\Common Files\VST3\</code>. Place CLAP in your host’s CLAP path. Rescan plugins. Load as instrument.</p>
       </div>
       <div class="step">
         <span class="step-n">03</span>
         <h3>Linux</h3>
-        <p>Copy VST3 to <code>~/.vst3/</code>, CLAP to <code>~/.clap/</code>. Rescan your host.</p>
+        <p>Copy VST3 to <code>~/.vst3/</code>, CLAP to <code>~/.clap/</code>. Rescan your host. Load as instrument.</p>
       </div>
       <div class="step">
         <span class="step-n">04</span>
-        <h3>Renoise</h3>
-        <p>Preferences → Plug-ins → enable VST3 → Rescan. Instrument slot → Plugin → <strong>Edwin Rosero: Fringe</strong>. Click the editor for keyboard focus.</p>
+        <h3>Renoise &amp; DAWs</h3>
+        <p>Renoise: Prefs → Plug-ins → VST3 → Rescan → Instrument → Plugin → <strong>Edwin Rosero: Fringe</strong>. Click the editor for Space / QWERTY. Same idea in Reaper, Ableton, Bitwig (instrument slot).</p>
       </div>
     </div>
   </section>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime entitlements for Developer ID + notarization.
+  Keep this minimal — only add rights notarytool/Gatekeeper accept.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Allow JIT-style codegen some runtimes need (JUCE / hosts) -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- Microphone / audio input if Standalone or host queries it -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+</dict>
+</plist>

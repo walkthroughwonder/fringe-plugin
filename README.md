@@ -61,19 +61,23 @@ export APPLE_TEAM_ID="…"
 ./scripts/package_release.sh
 ```
 
+**CI secrets** (full list + `gh secret set` commands):  
+[docs/SIGNING_AND_NOTARIZATION.md](docs/SIGNING_AND_NOTARIZATION.md)
+
 ## CI
 
 | Workflow | Platforms |
 |----------|-----------|
 | `.github/workflows/build.yml` | macOS universal (AU+VST3+CLAP), Windows, Linux |
 
-Tag `v1.1.0` to attach release zips. Add Apple secrets for notarization.
+Tag `v*` to attach release zips. With Apple secrets present, macOS artefacts are notarized.
 
 ## Docs
 - [INSTALL.md](INSTALL.md)  
 - [CHANGELOG.md](CHANGELOG.md)  
 - [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)  
 - [docs/SIGNING_AND_NOTARIZATION.md](docs/SIGNING_AND_NOTARIZATION.md)  
+- [docs/HOST_SMOKE.md](docs/HOST_SMOKE.md)  
 - [docs/PRODUCT_DECISIONS.md](docs/PRODUCT_DECISIONS.md)  
 
 ## License

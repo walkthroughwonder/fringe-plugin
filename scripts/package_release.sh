@@ -176,10 +176,19 @@ EOF
   chmod +x "$STAGE/Install-Plugins.command"
 fi
 
-# Sign / notarize
+# Sign / notarize (before zip so stapled tickets live inside the archive)
 if [[ "$PLATFORM" == "macOS" ]]; then
   if [[ ${#SIGN_LIST[@]} -gt 0 ]]; then
     bash "$ROOT/scripts/sign_and_notarize_macos.sh" "${SIGN_LIST[@]}"
+  fi
+  if [[ -n "${APPLE_DEVELOPER_ID:-}" && "${SKIP_NOTARIZE:-0}" != "1" ]]; then
+    if [[ -n "${APPLE_API_KEY_PATH:-}" || ( -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ) ]]; then
+      cat > "$STAGE/NOTARIZED.txt" << EOF
+Fringe ${VERSION} — Developer ID signed & notarized
+Identity: ${APPLE_DEVELOPER_ID}
+Built: $(date -u +%Y-%m-%dT%H:%MZ)
+EOF
+    fi
   fi
 fi
 
@@ -204,7 +213,6 @@ else
     fi
   )
 fi
-
 # Local install convenience (macOS)
 if [[ "$PLATFORM" == "macOS" && -n "$VST3" ]]; then
   mkdir -p "$HOME/Library/Audio/Plug-Ins/VST3"

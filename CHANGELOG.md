@@ -1,6 +1,15 @@
 # Changelog
 
-## 1.1.0 — multi-platform (in progress)
+## Unreleased
+
+### Packaging
+- CI imports Developer ID **.p12** via `APPLE_CERTIFICATE_BASE64` + password (required for real codesign on runners)
+- `resources/Fringe.entitlements` for hardened runtime notarization
+- `NOTARIZED.txt` marker inside signed packages
+- Host smoke checklist: `docs/HOST_SMOKE.md`
+- Product site: “Try in browser first”, clearer Gatekeeper / instrument install notes
+
+## 1.1.0 — multi-platform
 
 ### Packaging & platforms
 - **macOS universal** (`arm64` + `x86_64`) via CI / `FRINGE_UNIVERSAL=1`
