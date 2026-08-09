@@ -830,14 +830,14 @@ bool FringeAudioProcessorEditor::keyPressed (const juce::KeyPress& key)
     for (const auto& m : maps)
         if (ch == m.key)
         {
-            audioProcessor.getEngine().noteOn (m.note, 0.9f);
+            audioProcessor.getEngine().noteOnFromUi (m.note, 0.9f);
             return true;
         }
 
     if (key == juce::KeyPress::spaceKey)
     {
         // Emit a wavefront packet (does not toggle continuous SOURCE)
-        audioProcessor.getEngine().fireWavefront (0.95f);
+        audioProcessor.getEngine().fireWavefrontFromUi (0.95f);
         return true;
     }
 

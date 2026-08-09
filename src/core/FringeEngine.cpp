@@ -12,10 +12,35 @@ void FringeEngine::prepare (double sampleRate, int /*maxBlock*/)
     drawLayer_.assign (static_cast<size_t> (n), 1.0f);
     colScratch_.assign (static_cast<size_t> (sim_.height()), 0.0f);
     hasDraw_ = false;
+
+    {   // [9b] preallocate so process() never allocates or frees
+        std::lock_guard<std::mutex> lock (snapMutex_);
+        snap_.w = sim_.width();
+        snap_.h = sim_.height();
+        snap_.amp.assign (static_cast<size_t> (n), 0.0f);
+        snap_.speed.assign (static_cast<size_t> (n), 0.0f);
+        snap_.detector.assign (static_cast<size_t> (sim_.height()), 0.0f);
+        snapReady_.store (false, std::memory_order_release);
+    }
+
     for (auto& v : voices_)
         v.prepare (sampleRate_);
     fx_.prepare (sampleRate_);
-    rebuildOptics();
+
+    opticsPreset_.store (params_.preset, std::memory_order_relaxed);
+    opticsSlit_.store (params_.slit, std::memory_order_relaxed);
+    opticsSlitW_.store (params_.slitW, std::memory_order_relaxed);
+    uiSourceX_.store (params_.sourceX, std::memory_order_relaxed);
+    uiDetectorX_.store (params_.detectorX, std::memory_order_relaxed);
+
+    // prepare() is never concurrent with processBlock, so publishing straight
+    // into sim_ here is safe; mapMutex_ still guards a concurrent editor paint.
+    {
+        std::lock_guard<std::mutex> lock (mapMutex_);
+        buildOpticsLocked();
+        sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+        mapPending_.store (false, std::memory_order_release);
+    }
     reset();
 }
 
@@ -31,6 +56,7 @@ void FringeEngine::reset()
     pulseSamplesLeft_ = 0;
     wavefrontPulse_ = false;
     simAccum_ = 0.0;
+    lastSlit_ = -1.0f;   // force one optics resync after reset (slit range is 0.008..0.15)
 }
 
 EngineParams FringeEngine::getParams() const
@@ -40,7 +66,8 @@ EngineParams FringeEngine::getParams() const
 
 bool FringeEngine::isDrawPreset() const
 {
-    return static_cast<Preset> (params_.preset) == Preset::Draw;
+    // Called from the message thread; read the atomic mirror, not params_.
+    return static_cast<Preset> (opticsPreset_.load (std::memory_order_acquire)) == Preset::Draw;
 }
 
 void FringeEngine::setParams (const EngineParams& p)
@@ -53,44 +80,65 @@ void FringeEngine::setParams (const EngineParams& p)
 
     params_ = p;
 
+    opticsPreset_.store (params_.preset, std::memory_order_release);
+    opticsSlitW_.store (params_.slitW, std::memory_order_release);
+    uiSourceX_.store (params_.sourceX, std::memory_order_release);
+    uiDetectorX_.store (params_.detectorX, std::memory_order_release);
+
+    // setParams runs on the AUDIO thread (processBlock -> pushParamsToEngine).
+    // The 25k-element fill this used to do here raced paintAt on the message
+    // thread; defer it to syncOptics, which holds mapMutex_.
     if (leavingDraw)
-    {
-        hasDraw_ = false;
-        std::fill (drawLayer_.begin(), drawLayer_.end(), 1.0f);
-    }
+        clearDrawPending_.store (true, std::memory_order_release);
 
     // Don't rebuild over draw strokes while in Draw
-    if (opticsDirty && static_cast<Preset> (params_.preset) != Preset::Draw)
-        rebuildOptics();
-    else if (opticsDirty && static_cast<Preset> (params_.preset) == Preset::Draw && ! hasDraw_)
-        rebuildOptics();
+    if (opticsDirty && (static_cast<Preset> (params_.preset) != Preset::Draw
+                        || ! hasDraw_.load (std::memory_order_acquire)))
+    {
+        opticsSlit_.store (params_.slit, std::memory_order_release);
+        lastSlit_ = params_.slit;
+        requestOpticsRebuild();
+    }
 
     sim_.setSpeedMult (params_.speed);
     sim_.setSensitivity (params_.sensitivity);
     sim_.setDetectorX (std::clamp (params_.detectorX, 0.55f, 0.98f));
 }
 
+// Message thread: update the UI mirror only. The real value reaches the engine
+// via APVTS -> pushParamsToEngine() -> setParams() on the audio thread, which
+// arrives on the very next block. Writing params_/sim_ from here raced the
+// running callback.
 void FringeEngine::setSourceX (float uvX)
 {
-    params_.sourceX = std::clamp (uvX, 0.02f, 0.45f);
+    uiSourceX_.store (std::clamp (uvX, 0.02f, 0.45f), std::memory_order_release);
 }
 
 void FringeEngine::setDetectorX (float uvX)
 {
-    params_.detectorX = std::clamp (uvX, 0.55f, 0.98f);
-    sim_.setDetectorX (params_.detectorX);
+    uiDetectorX_.store (std::clamp (uvX, 0.55f, 0.98f), std::memory_order_release);
 }
 
-float FringeEngine::getSourceX() const { return params_.sourceX; }
-float FringeEngine::getDetectorX() const { return params_.detectorX; }
+float FringeEngine::getSourceX() const { return uiSourceX_.load (std::memory_order_acquire); }
+float FringeEngine::getDetectorX() const { return uiDetectorX_.load (std::memory_order_acquire); }
 
-void FringeEngine::rebuildOptics()
+void FringeEngine::requestOpticsRebuild()
 {
-    std::lock_guard<std::mutex> lock (mapMutex_);
-    const auto preset = static_cast<Preset> (std::clamp (params_.preset, 0, static_cast<int> (Preset::Count) - 1));
-    OpticsBuilder::build (preset, params_.slit, params_.slitW, sim_.width(), sim_.height(), speedScratch_.data());
+    opticsDirty_.store (true, std::memory_order_release);
+}
 
-    if (hasDraw_ && preset == Preset::Draw)
+// Caller holds mapMutex_. Fills speedScratch_ only — never touches sim_, so it
+// is safe to run from either thread. Publishing into sim_ is syncOptics's job.
+void FringeEngine::buildOpticsLocked()
+{
+    const auto preset = static_cast<Preset> (std::clamp (opticsPreset_.load (std::memory_order_acquire),
+                                                         0, static_cast<int> (Preset::Count) - 1));
+    OpticsBuilder::build (preset,
+                          opticsSlit_.load (std::memory_order_acquire),
+                          opticsSlitW_.load (std::memory_order_acquire),
+                          sim_.width(), sim_.height(), speedScratch_.data());
+
+    if (hasDraw_.load (std::memory_order_acquire) && preset == Preset::Draw)
     {
         // composite: wall if either base or draw is wall
         for (size_t i = 0; i < speedScratch_.size(); ++i)
@@ -98,7 +146,38 @@ void FringeEngine::rebuildOptics()
                 speedScratch_[i] = 0.0f;
     }
 
-    sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+    mapPending_.store (true, std::memory_order_release);
+}
+
+// Audio thread only. Never blocks: a failed try_lock leaves the flags set and
+// the work is retried next block, costing at most one block of stale optics.
+void FringeEngine::syncOptics()
+{
+    if (! opticsDirty_.load (std::memory_order_acquire)
+        && ! mapPending_.load (std::memory_order_acquire)
+        && ! simResetPending_.load (std::memory_order_acquire)
+        && ! clearDrawPending_.load (std::memory_order_acquire))
+        return;                       // fast path: no lock attempt at all
+
+    std::unique_lock<std::mutex> lock (mapMutex_, std::try_to_lock);
+    if (! lock.owns_lock())
+        return;                       // UI is mid-paint; retry next block
+
+    if (clearDrawPending_.exchange (false, std::memory_order_acq_rel))
+    {
+        std::fill (drawLayer_.begin(), drawLayer_.end(), 1.0f);
+        hasDraw_.store (false, std::memory_order_release);
+        opticsDirty_.store (true, std::memory_order_release);
+    }
+
+    if (opticsDirty_.exchange (false, std::memory_order_acq_rel))
+        buildOpticsLocked();
+
+    if (mapPending_.exchange (false, std::memory_order_acq_rel))
+        sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+
+    if (simResetPending_.exchange (false, std::memory_order_acq_rel))
+        sim_.reset();
 }
 
 void FringeEngine::paintAt (float uvX, float uvY, float brushUv, bool erase)
@@ -111,25 +190,19 @@ void FringeEngine::paintAt (float uvX, float uvY, float brushUv, bool erase)
         drawLayer_.assign (static_cast<size_t> (sim_.width() * sim_.height()), 1.0f);
 
     OpticsBuilder::paintDot (drawLayer_.data(), sim_.width(), sim_.height(), uvX, uvY, brushUv, erase);
-    hasDraw_ = true;
-
-    OpticsBuilder::build (Preset::Draw, params_.slit, params_.slitW, sim_.width(), sim_.height(), speedScratch_.data());
-    for (size_t i = 0; i < speedScratch_.size(); ++i)
-        if (drawLayer_[i] < 0.5f)
-            speedScratch_[i] = 0.0f;
-
-    sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
+    hasDraw_.store (true, std::memory_order_release);
+    buildOpticsLocked();
 }
 
 void FringeEngine::clearDrawing()
 {
     std::lock_guard<std::mutex> lock (mapMutex_);
     std::fill (drawLayer_.begin(), drawLayer_.end(), 1.0f);
-    hasDraw_ = false;
-    OpticsBuilder::build (static_cast<Preset> (params_.preset), params_.slit, params_.slitW,
-                          sim_.width(), sim_.height(), speedScratch_.data());
-    sim_.setSpeedMap (speedScratch_.data(), sim_.width(), sim_.height());
-    sim_.reset();
+    hasDraw_.store (false, std::memory_order_release);
+    buildOpticsLocked();
+    // sim_.reset() memset the FDTD buffers under a running substep(); let the
+    // audio thread do it.
+    simResetPending_.store (true, std::memory_order_release);
 }
 
 void FringeEngine::noteOn (int note, float velocity)
@@ -160,6 +233,36 @@ void FringeEngine::fireWavefront (float velocity)
     // Don't latch enhanced hold note
     if (params_.midiMode != 1)
         activeNote_ = -1;
+}
+
+// --- UI -> audio thread handoff -------------------------------------------
+// noteOn/fireWavefront mutate envelope_, sourceAmp_, pulseSamplesLeft_ and
+// activeNote_, which applyGateAndEnvelope() reads per sample. Calling them
+// from the message thread raced the callback, so the editor queues instead
+// and the audio thread applies the event at the top of the next block.
+// A single slot is sufficient: two events inside one block already overwrote
+// each other before this change.
+
+void FringeEngine::noteOnFromUi (int note, float velocity)
+{
+    uiNoteVel_.store (std::clamp (velocity, 0.0f, 1.0f), std::memory_order_relaxed);
+    uiNote_.store (note, std::memory_order_release);
+}
+
+void FringeEngine::fireWavefrontFromUi (float velocity)
+{
+    uiWavefrontVel_.store (std::clamp (velocity, 0.0f, 1.0f), std::memory_order_relaxed);
+    uiWavefront_.store (1, std::memory_order_release);
+}
+
+void FringeEngine::drainUiRequests()
+{
+    const int n = uiNote_.exchange (-1, std::memory_order_acq_rel);
+    if (n >= 0)
+        noteOn (n, uiNoteVel_.load (std::memory_order_relaxed));
+
+    if (uiWavefront_.exchange (0, std::memory_order_acq_rel) != 0)
+        fireWavefront (uiWavefrontVel_.load (std::memory_order_relaxed));
 }
 
 void FringeEngine::noteOff (int note)
@@ -273,6 +376,8 @@ void FringeEngine::process (float* left, float* right, int numSamples)
     if (left == nullptr || right == nullptr || numSamples <= 0)
         return;
 
+    drainUiRequests();          // [11] apply queued UI note/wavefront events here
+
     tickLfos (numSamples);
     const auto mod = modulatedParams();
 
@@ -284,16 +389,21 @@ void FringeEngine::process (float* left, float* right, int numSamples)
     fx_.setScaleMode (mod.scaleMode);
     fx_.setDroneMode (mod.droneMode);
 
-    // Rebuild optics if LFO is modulating slit on geometry presets
-    static float lastSlit = -1.0f;
-    if (std::abs (mod.slit - lastSlit) > 0.002f && static_cast<Preset> (params_.preset) != Preset::Draw)
+    // Rebuild optics if LFO is modulating slit on geometry presets.
+    // lastSlit_ is per-instance now; the old function-local static was shared
+    // by every FringeEngine in the process, so two plugin instances corrupted
+    // each other's tracking and raced on it. The params_.slit save/restore
+    // hack is gone too — it briefly published a value the message thread
+    // could read mid-swap.
+    if (std::abs (mod.slit - lastSlit_) > 0.002f
+        && static_cast<Preset> (opticsPreset_.load (std::memory_order_relaxed)) != Preset::Draw)
     {
-        lastSlit = mod.slit;
-        const float saved = params_.slit;
-        params_.slit = mod.slit;
-        rebuildOptics();
-        params_.slit = saved;
+        lastSlit_ = mod.slit;
+        opticsSlit_.store (mod.slit, std::memory_order_release);
+        requestOpticsRebuild();
     }
+
+    syncOptics();               // [9a] the only place that publishes geometry into sim_
 
     const double substepsWanted = static_cast<double> (numSamples) / sampleRate_ * 60.0 * kSubstepsPerBody;
     simAccum_ += substepsWanted;
@@ -327,22 +437,28 @@ void FringeEngine::process (float* left, float* right, int numSamples)
     if (snapCountdown_ <= 0)
     {
         snapCountdown_ = static_cast<int> (sampleRate_ / 30.0);
-        FieldSnapshot local;
-        local.w = sim_.width();
-        local.h = sim_.height();
-        local.amp.resize (static_cast<size_t> (local.w * local.h));
-        local.speed.resize (static_cast<size_t> (local.w * local.h));
-        local.detector.resize (static_cast<size_t> (local.h));
-        sim_.copyAmplitude (local.amp.data());
-        sim_.copySpeed (local.speed.data());
-        sim_.readDetectorColumn (kDetC, local.detector.data(), local.h);
-        local.detectorX = sim_.detectorX();
-        local.sourceX = sim_.sourceX();
-        local.energy = voices_[1].energy();
+        // [9b] No allocation, no free, no blocking. This used to resize three
+        // vectors (~196 KB of malloc) and then move-assign into snap_, which
+        // also FREED snap_'s previous buffers — all on the audio thread, ~30x
+        // a second, inside a blocking lock. Buffers are preallocated in
+        // prepare(); a failed try_lock simply drops one 30 Hz visual frame.
+        const size_t n = static_cast<size_t> (sim_.width() * sim_.height());
+        if (snap_.amp.size() == n && snap_.speed.size() == n
+            && snap_.detector.size() == static_cast<size_t> (sim_.height()))
         {
-            std::lock_guard<std::mutex> lock (snapMutex_);
-            snap_ = std::move (local);
-            snapReady_.store (true, std::memory_order_release);
+            std::unique_lock<std::mutex> lock (snapMutex_, std::try_to_lock);
+            if (lock.owns_lock())
+            {
+                snap_.w = sim_.width();
+                snap_.h = sim_.height();
+                sim_.copyAmplitude (snap_.amp.data());
+                sim_.copySpeed (snap_.speed.data());
+                sim_.readDetectorColumn (kDetC, snap_.detector.data(), snap_.h);
+                snap_.detectorX = sim_.detectorX();
+                snap_.sourceX = sim_.sourceX();
+                snap_.energy = voices_[1].energy();
+                snapReady_.store (true, std::memory_order_release);
+            }
         }
     }
 }
