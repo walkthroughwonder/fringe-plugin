@@ -51,7 +51,9 @@ Status of **Fringe** (web instrument + native plugin + product sites) for the ne
 
 ### Web instrument
 
-- Original at `/fringe/` under portfolio; deferred load via chooser (`import('./main.js')` after pick)
+- Canonical copy in this repo: [`web/`](../web/) (`index.html` chooser + `main.js` / engines)
+- Production still served from the portfolio `/fringe/` on Netlify — sync `web/` there to ship
+- Deferred load via chooser (`import('./main.js')` after pick); `main.js` inits if `document.readyState` is already past `loading`
 - Session remembers `fringe-mode=web`; `?play=1` / `?plugin=1` deep links
 
 ### Sites

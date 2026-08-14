@@ -1,0 +1,24 @@
+# Browser-instrument checks (chooser bootstrap, no native toolchain)
+name: Web
+
+on:
+  push:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bootstrap guards
+        run: node web/bootstrap.test.mjs
