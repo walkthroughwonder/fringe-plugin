@@ -11,6 +11,8 @@ Port of: [edwinrosero.com/fringe](https://edwinrosero.com/fringe/)
 **https://edwinrosero.com/fringe-plugin/**  
 Local: [`website/index.html`](website/index.html) · mirror: https://walkthroughwonder.github.io/fringe-plugin/
 
+Browser instrument (chooser + wave field): [`web/`](web/) — live at [edwinrosero.com/fringe](https://edwinrosero.com/fringe/). Serve `web/` locally; `?play=1` skips the chooser.
+
 ## Download
 
 **[GitHub Releases](https://github.com/walkthroughwonder/fringe-plugin/releases)**

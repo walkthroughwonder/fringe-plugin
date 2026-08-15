@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Web instrument
+- Chooser / `?play=1` now initializes after a late `import('./main.js')` (DOMContentLoaded had already fired, so the field stayed blank)
+- “Play in browser” is a real `?play=1` link if click JS never binds
+- Instrument column fits a 1280×800 viewport so knob labels stay on-screen
+
 ### Packaging
 - CI imports Developer ID **.p12** via `APPLE_CERTIFICATE_BASE64` + password (required for real codesign on runners)
 - `resources/Fringe.entitlements` for hardened runtime notarization
